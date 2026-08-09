@@ -45,4 +45,4 @@ def download(repo, dest="models"):
             print(f"  exists {dst}")
 
 if __name__ == "__main__":
-    download("Snowflake/snowflake-arctic-embed-m-v2.0")
+    download("Xenova/multilingual-e5-base")

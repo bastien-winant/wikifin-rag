@@ -6,7 +6,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[2]
 
 class Embedder:
-    def __init__(self, path="models/Xenova/all-MiniLM-L6-v2"):
+    def __init__(self, path="models/Xenova/multilingual-e5-base"):
         path = ROOT_DIR / path
         self.tokenizer = Tokenizer.from_file(str(path / "tokenizer.json"))
         self.session = ort.InferenceSession(

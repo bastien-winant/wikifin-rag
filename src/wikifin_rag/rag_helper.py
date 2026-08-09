@@ -20,43 +20,39 @@ CONTEXT:
 
 
 class RAGBase:
-
     def __init__(
         self,
-        index,
+        embedder,
+        conn,
         llm_client,
         instructions=INSTRUCTIONS,
         prompt_template=PROMPT_TEMPLATE,
-        course='llm-zoomcamp',
         model='gpt-5.4-mini'
     ):
-        self.index = index
+        self.embedder = embedder
+        self.conn = conn
         self.llm_client = llm_client
         self.instructions = instructions
-        self.course = course
         self.prompt_template = prompt_template
         self.model = model
 
     def search(self, query, num_results=5):
-        boost_dict = {'question': 3.0, 'section': 0.5}
-        filter_dict = {'course': self.course}
+        query_vector = self.embedder.encode(query)
 
-        return self.index.search(
-            query,
-            num_results=num_results,
-            boost_dict=boost_dict,
-            filter_dict=filter_dict
-        )
+        rows = self.conn.execute(
+            """
+            SELECT *
+            FROM faq_chunks
+            ORDER BY embedding <=> %s::vector
+            LIMIT %s
+            """,
+            (query_vector, num_results)
+        ).fetchall()
+
+        return rows
 
     def build_context(self, search_results):
-        lines = []
-
-        for doc in search_results:
-            lines.append(doc['section'])
-            lines.append('Q: ' + doc['question'])
-            lines.append('A: ' + doc['answer'])
-            lines.append('')
-
+        lines = [doc['content'] for doc in search_results]
         return '\n'.join(lines).strip()
 
     def build_prompt(self, query, search_results):
@@ -78,8 +74,8 @@ class RAGBase:
 
         return response.output_text
 
-    def rag(self, query):
-        search_results = self.search(query)
+    def rag(self, query, num_results=5):
+        search_results = self.search(query, num_results=num_results)
         prompt = self.build_prompt(query, search_results)
         answer = self.llm(prompt)
         return answer
