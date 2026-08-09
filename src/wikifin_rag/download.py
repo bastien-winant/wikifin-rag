@@ -14,7 +14,7 @@ ONNX_CANDIDATES = [
 ]
 
 def download(repo, dest="models"):
-    dest = Path(dest) / repo
+    dest = Path(__file__).resolve().parents[2] / dest / repo
     dest.mkdir(parents=True, exist_ok=True)
 
     files = list_repo_files(repo_id=repo)
@@ -45,4 +45,4 @@ def download(repo, dest="models"):
             print(f"  exists {dst}")
 
 if __name__ == "__main__":
-    download("Xenova/all-MiniLM-L6-v2")
+    download("Snowflake/snowflake-arctic-embed-m-v2.0")
