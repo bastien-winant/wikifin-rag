@@ -7,7 +7,12 @@ authors = [
     { name = "Bastien Winant", email = "armand.winant@gmail.com" }
 ]
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "jupyter>=1.1.1",
+    "openai>=2.53.0",
+    "psycopg[binary]>=3.3.4",
+    "python-dotenv>=1.2.2",
+]
 
 [project.scripts]
 wikifin-rag = "wikifin_rag:main"
