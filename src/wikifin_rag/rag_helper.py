@@ -1,6 +1,6 @@
 INSTRUCTIONS = '''
 Your task is to answer questions about personal finance
-based on the provided context.
+based on the provided context using simple, everyday words.
 
 Use the context to find relevant information and provide accurate
 answers. If the answer is not found in the context,
@@ -41,18 +41,36 @@ class RAGBase:
         query_str = "[" + ",".join(str(x) for x in query_vector) + "]"
         rows = self.conn.execute(
             """
-            SELECT *, 1 - (embedding <=> %s::vector) AS similarity
+            SELECT
+                id,
+                page_title,
+                language,
+                content,
+                1 - (embedding <=> %s::vector) AS similarity
             FROM faq_chunks
             ORDER BY embedding <=> %s::vector
             LIMIT %s
             """,
-            (query_str, num_results)
+            (query_str, query_str, num_results)
         ).fetchall()
 
-        return rows
+        return [{
+            'id': row[0],
+            'page_title': row[1],
+            'language': row[2],
+            'content': row[3],
+            'similarity': row[4]
+            } for row in rows]
 
     def build_context(self, search_results):
-        lines = [doc['content'] for doc in search_results]
+        lines = []
+
+        for doc in search_results:
+            lines.append('Title: ' + doc['page_title'])
+            lines.append('Language: ' + doc['language'])
+            lines.append('Content: ' + doc['content'])
+            lines.append('')
+
         return '\n'.join(lines).strip()
 
     def build_prompt(self, query, search_results):
