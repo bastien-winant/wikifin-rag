@@ -12,12 +12,8 @@ import psycopg
 load_dotenv(override=True)
 
 
-ROOT_DIR = Path(__file__).resolve().parents[2]
-DATA_PATH = ROOT_DIR / "data" / "faq_corpus.jsonl"
-
-
-def load_faq_data():
-    with DATA_PATH.open("r", encoding="utf-8") as f:
+def load_faq_data(filepath):
+    with filepath.open("r", encoding="utf-8") as f:
         return [json.loads(line.strip()) for line in f if line.strip()]
 
 

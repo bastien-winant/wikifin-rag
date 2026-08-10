@@ -2,8 +2,7 @@ import numpy as np
 import onnxruntime as ort
 from tokenizers import Tokenizer
 from pathlib import Path
-
-ROOT_DIR = Path(__file__).resolve().parents[2]
+from config import ROOT_DIR
 
 class Embedder:
     def __init__(self, path="models/Xenova/multilingual-e5-base"):
