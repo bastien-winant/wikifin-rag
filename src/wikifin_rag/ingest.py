@@ -121,3 +121,23 @@ def ensure_faq_table_exists():
             USING hnsw (embedding vector_cosine_ops)
         """)
         conn.commit()
+
+
+def insert_faq_chunks(chunks, embeddings):
+    with get_db_connection() as conn:
+        for chunk, embedding in zip(chunks, embeddings):
+            conn.execute("""
+                INSERT INTO faq_chunks
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id, start, language) DO NOTHING;
+            """, (
+                chunk["id"],
+                chunk.get("language"),
+                chunk.get("page_url"),
+                chunk.get("page_title"),
+                chunk.get("source_urls"),
+                chunk["start"],
+                chunk["content"],
+                embedding.tolist()  # Convert numpy array to list for JSON serialization
+            ))
+        conn.commit()
