@@ -55,8 +55,7 @@ def chunk_faq_data(documents, chunk_size=200, overlap=50):
                 "page_url": page_url,
                 "page_title": page_title,
                 "source_urls": source_urls,
-                "start": start,
-                "end": end
+                "start": start
             })
 
             if end == len(text):
@@ -83,9 +82,9 @@ def embed_texts(texts, batch_size=50):
 def get_db_connection():
     db_host = "localhost"
     db_port = 5432
-    db_name = os.environ.get("WIKIFIN_RAG_DB_NAME", "wikifin_rag")
-    db_user = os.environ.get("WIKIFIN_RAG_DB_USER", "wikifin_rag_user")
-    db_password = os.environ.get("WIKIFIN_RAG_DB_PASSWORD", "wikifin_rag_password")
+    db_name = os.environ.get("POSTGRES_DB", "wikifin_rag")
+    db_user = os.environ.get("POSTGRES_USER", "wikifin_rag_user")
+    db_password = os.environ.get("POSTGRES_PASSWORD", "wikifin_rag_password")
 
     conn_str = f"host={db_host} port={db_port} dbname={db_name} user={db_user} password={db_password}"
     last_conn = None
@@ -101,13 +100,9 @@ def get_db_connection():
     raise last_conn
     
 
-
 def ensure_faq_table_exists():
     with get_db_connection() as conn:
         conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
-        conn.execute("""
-            DROP TABLE IF EXISTS documents;
-        """)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS faq_chunks (
                 id TEXT NOT NULL,
@@ -115,11 +110,14 @@ def ensure_faq_table_exists():
                 page_url TEXT,
                 page_title TEXT,
                 source_urls TEXT[],
-                start INT,
-                end INT,
+                start INT NOT NULL,
                 content TEXT NOT NULL,
                 embedding vector(768),
                 PRIMARY KEY (id, start, language)
             );
+        """)
+        conn.execute("""
+            CREATE INDEX ON faq_chunks
+            USING hnsw (embedding vector_cosine_ops)
         """)
         conn.commit()

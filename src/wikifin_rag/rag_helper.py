@@ -38,15 +38,15 @@ class RAGBase:
 
     def search(self, query, num_results=5):
         query_vector = self.embedder.encode(query)
-
+        query_str = "[" + ",".join(str(x) for x in query_vector) + "]"
         rows = self.conn.execute(
             """
-            SELECT *
+            SELECT *, 1 - (embedding <=> %s::vector) AS similarity
             FROM faq_chunks
             ORDER BY embedding <=> %s::vector
             LIMIT %s
             """,
-            (query_vector, num_results)
+            (query_str, num_results)
         ).fetchall()
 
         return rows
