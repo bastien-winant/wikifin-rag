@@ -16,7 +16,7 @@ def load_corpus(filepath):
         return [json.loads(line.strip()) for line in f if line.strip()]
 
 
-def chunk_faq_data(documents, chunk_size=200, overlap=50):
+def chunk_documents(documents, content_key="content", chunk_size=200, overlap=50):
     if chunk_size <= 0:
         raise ValueError("chunk_size must be a positive integer.")
     if overlap < 0:
@@ -26,34 +26,23 @@ def chunk_faq_data(documents, chunk_size=200, overlap=50):
 
     chunks = []
     for doc in documents:
-        id = doc["id"]
-        question = doc["question"]
-        answer = doc["answer"]
-        text = f"Question: {question}\nAnswer: {answer}"
-        language = doc.get("language")
-        page_url = doc.get("page_url")
-        page_title = doc.get("page_title")
-        source_urls = doc.get("source_urls", [])
-
+        content = doc.get(content_key, "")
+        
         stride = chunk_size - overlap
         start = 0
         idx = 0
 
-        while start < len(text):
-            end = min(start + chunk_size, len(text))
-            chunk_text = text[start:end]
-            chunk_id = f"{id}_chunk_{idx}"
-            chunks.append({
-                "id": chunk_id,
-                "content": chunk_text,
-                "language": language,
-                "page_url": page_url,
-                "page_title": page_title,
-                "source_urls": source_urls,
-                "start": start
-            })
+        while start < len(content):
+            end = min(start + chunk_size, len(content))
 
-            if end == len(text):
+            chunk_dict = doc.copy()
+            chunk_dict["chunk_id"] = idx
+            chunk_dict["start"] = start
+            chunk_dict[content_key] = content[start:end]
+
+            chunks.append(chunk_dict)
+
+            if end == len(content):
                 break
 
             idx += 1
@@ -99,42 +88,47 @@ def ensure_faq_table_exists():
     with get_db_connection() as conn:
         conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
         conn.execute("""
-            CREATE TABLE IF NOT EXISTS faq_chunks (
+            CREATE TABLE IF NOT EXISTS documents (
                 id TEXT NOT NULL,
                 language TEXT,
-                page_url TEXT,
-                page_title TEXT,
-                source_urls TEXT[],
-                start INT NOT NULL,
-                content TEXT NOT NULL,
+                url TEXT,
+                title TEXT,
+                topic TEXT,
+                chunk_id INT DEFAULT 0,
+                start INT DEFAULT 0,
+                content TEXT,
                 embedding vector(768),
-                PRIMARY KEY (id, start, language)
+                source_urls TEXT[],
+                PRIMARY KEY (id, language, chunk_id)
             );
         """)
 
         # create index for fast vector search using HNSW (Hierarchical Navigable Small World) algorithm
         conn.execute("""
-            CREATE INDEX ON faq_chunks
+            CREATE INDEX ON documents
             USING hnsw (embedding vector_cosine_ops)
         """)
         conn.commit()
 
 
-def insert_faq_chunks(chunks, embeddings):
+def insert_documents(documents, embeddings):
+    ensure_faq_table_exists()
     with get_db_connection() as conn:
-        for chunk, embedding in zip(chunks, embeddings):
+        for doc, embedding in zip(documents, embeddings):
             conn.execute("""
-                INSERT INTO faq_chunks
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (id, start, language) DO NOTHING;
+                INSERT INTO documents
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (id, language, chunk_id) DO NOTHING;
             """, (
-                chunk["id"],
-                chunk.get("language"),
-                chunk.get("page_url"),
-                chunk.get("page_title"),
-                chunk.get("source_urls"),
-                chunk["start"],
-                chunk["content"],
-                embedding.tolist()  # Convert numpy array to list for JSON serialization
+                doc["id"],
+                doc.get("language"),
+                doc.get("url"),
+                doc.get("title"),
+                doc.get("topic"),
+                doc.get("chunk_id", 0),
+                doc.get("start"),
+                doc.get("content"),
+                embedding.tolist(),  # Convert numpy array to list for JSON serialization
+                doc.get("source_urls"),
             ))
         conn.commit()

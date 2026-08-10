@@ -43,11 +43,12 @@ class RAGBase:
             """
             SELECT
                 id,
-                page_title,
                 language,
+                topic,
                 content,
                 1 - (embedding <=> %s::vector) AS similarity
-            FROM faq_chunks
+            FROM documents
+            WHERE embedding IS NOT NULL
             ORDER BY embedding <=> %s::vector
             LIMIT %s
             """,
@@ -56,8 +57,8 @@ class RAGBase:
 
         return [{
             'id': row[0],
-            'page_title': row[1],
-            'language': row[2],
+            'language': row[1],
+            'topic': row[2],
             'content': row[3],
             'similarity': row[4]
             } for row in rows]
@@ -66,7 +67,7 @@ class RAGBase:
         lines = []
 
         for doc in search_results:
-            lines.append('Title: ' + doc['page_title'])
+            lines.append('Topic: ' + doc['topic'])
             lines.append('Language: ' + doc['language'])
             lines.append('Content: ' + doc['content'])
             lines.append('')
