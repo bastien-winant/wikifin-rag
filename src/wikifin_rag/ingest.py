@@ -1,6 +1,5 @@
 import json
 import os
-from pathlib import Path
 import time
 from dotenv import load_dotenv
 from tqdm.auto import tqdm
@@ -12,7 +11,7 @@ import psycopg
 load_dotenv(override=True)
 
 
-def load_faq_data(filepath):
+def load_corpus(filepath):
     with filepath.open("r", encoding="utf-8") as f:
         return [json.loads(line.strip()) for line in f if line.strip()]
 
