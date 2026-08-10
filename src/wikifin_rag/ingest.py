@@ -116,6 +116,8 @@ def ensure_faq_table_exists():
                 PRIMARY KEY (id, start, language)
             );
         """)
+
+        # create index for fast vector search using HNSW (Hierarchical Navigable Small World) algorithm
         conn.execute("""
             CREATE INDEX ON faq_chunks
             USING hnsw (embedding vector_cosine_ops)
