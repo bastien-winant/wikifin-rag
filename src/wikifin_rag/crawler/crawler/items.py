@@ -9,5 +9,6 @@ class DocumentItem:
     title: str | None = None
     description: str | None = None
     date: Date | None = None
-    html: str  | None = None
+    html: str | None = None
+    content: str | None = None
     related_links: str  | None = None

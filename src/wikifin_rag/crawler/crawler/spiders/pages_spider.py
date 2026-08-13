@@ -53,7 +53,13 @@ class PagesSpider(scrapy.Spider):
         node = main.css(".node")[0]
 
         # TODO: extract the text from node_content
-        node_content = node.css(".node__content").get()
+        html_content = node.css(".node__content").get()
+        text_content = extract(
+            html_content,
+            output_format="markdown",
+            include_links=False,
+            include_tables=True,
+            include_formatting=False)
 
         # Recursively follow links
         links = node.css("a")
@@ -66,19 +72,6 @@ class PagesSpider(scrapy.Spider):
         related_links = node.css('.related-content a::attr("href")').getall()
         related_links = ", ".join(related_links)
 
-        ###########################################################################
-        ###########################################################################
-        node_count = len(main.css(".node"))
-        node_content_count = len(node.css(".node__content"))
-
-        if node_count > 1 or node_content_count > 1:
-            print("=========================================")
-            print(f"===== NUMBER OF NODES ON THE PAGE: {node_count} =====")
-            print(f"======== NODE CONTENT COUNT: {node_content_count} ========")
-            print("=========================================")
-        ###########################################################################
-        ###########################################################################
-
         # save the data to the database
         yield DocumentItem(
             source_url=response.url,
@@ -86,7 +79,8 @@ class PagesSpider(scrapy.Spider):
             title=title,
             description=description,
             date=date,
-            html=html,
+            html=html_content,
+            content=text_content,
             related_links=related_links
         )
 

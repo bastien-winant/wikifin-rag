@@ -20,6 +20,7 @@ class SQLiteUploadPipeline:
                 description TEXT,
                 date TEXT,
                 html TEXT,
+                content TEXT,
                 embedding vector(768),
                 related_links TEXT[]
             );"""
@@ -40,7 +41,7 @@ class SQLiteUploadPipeline:
         
         self.cur.execute(
             f"""INSERT INTO {self.collection_name} (source_url, language, title, description, date, html, related_links)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (source_url) DO NOTHING;
             """,
             (
@@ -50,6 +51,7 @@ class SQLiteUploadPipeline:
                 adapter.get("description"),
                 adapter.get("date"),
                 adapter.get("html"),
+                adapter.get("content"),
                 adapter.get("related_urls")
             )
         )
