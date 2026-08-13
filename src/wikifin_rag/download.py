@@ -1,7 +1,7 @@
 import os
 import shutil
 import logging
-from pathlib import Path
+from config import PROJECT_ROOT
 from huggingface_hub import hf_hub_download, list_repo_files
 
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
@@ -14,7 +14,7 @@ ONNX_CANDIDATES = [
 ]
 
 def download(repo, dest="models"):
-    dest = Path(__file__).resolve().parents[2] / dest / repo
+    dest = PROJECT_ROOT / dest / repo
     dest.mkdir(parents=True, exist_ok=True)
 
     files = list_repo_files(repo_id=repo)
@@ -45,4 +45,4 @@ def download(repo, dest="models"):
             print(f"  exists {dst}")
 
 if __name__ == "__main__":
-    download("Xenova/multilingual-e5-base")
+    download("Xenova/all-MiniLM-L6-v2")

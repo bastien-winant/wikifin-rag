@@ -10,18 +10,20 @@ requires-python = ">=3.14"
 dependencies = [
     "numpy>=2.5.2",
     "onnxruntime>=1.28.0",
-    "openai>=2.53.0",
+    "openai>=3.0.0",
     "psycopg[binary]>=3.3.4",
     "python-dotenv>=1.2.2",
+    "scrapy>=2.17.0",
     "tokenizers>=0.23.1",
     "tqdm>=4.70.0",
+    "trafilatura>=2.2.0",
 ]
 
 [project.scripts]
 wikifin-rag = "wikifin_rag:main"
 
 [build-system]
-requires = ["uv_build>=0.12.0,<0.13.0"]
+requires = ["uv_build>=0.12.3,<0.13.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
