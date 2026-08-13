@@ -1,12 +1,12 @@
 import numpy as np
 import onnxruntime as ort
 from tokenizers import Tokenizer
-from pathlib import Path
+from config import PROJECT_ROOT
 
 
 class Embedder:
     def __init__(self, path="models/Xenova/all-MiniLM-L6-v2"):
-        path = Path(path)
+        path = PROJECT_ROOT / path
         self.tokenizer = Tokenizer.from_file(str(path / "tokenizer.json"))
         self.session = ort.InferenceSession(
             str(path / "model.onnx"), providers=["CPUExecutionProvider"]
