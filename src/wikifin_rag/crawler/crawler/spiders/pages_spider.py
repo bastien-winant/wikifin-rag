@@ -1,12 +1,18 @@
 import scrapy
 from crawler.items import DocumentItem
-from trafilatura import fetch_url, extract, bare_extraction, extract_metadata
+from trafilatura import extract_metadata
+from bs4 import BeautifulSoup
 from datetime import datetime
 
 
 def has_class(selector, classname):
     selector_classes = selector.attrib["class"].split()
     return classname in selector_classes
+
+
+def extract_content(html_str):
+    soup = BeautifulSoup(html_str, "html.parser")
+    return soup.get_text(" ", strip=True)
 
 
 class PagesSpider(scrapy.Spider):
@@ -32,8 +38,10 @@ class PagesSpider(scrapy.Spider):
         else:
             urls = urlset.xpath(".//url/link").getall()
 
-        yield from response.follow_all(urls[:2], callback=self.parse_content_page)
+        yield from response.follow_all(set(urls[:5]), callback=self.parse_content_page)
 
+        # faq_urls = [url for url in urls if 'faq' in url.attrib['href']]
+        # yield from response.follow_all(set(faq_urls), callback=self.parse_content_page)
 
     def parse_content_page(self, response):
         language = getattr(self, "language", None)
@@ -49,89 +57,65 @@ class PagesSpider(scrapy.Spider):
         date_format = '%Y-%m-%d'
         date = datetime.strptime(date_str, date_format) if date_str else None
 
+        # isolate the main content
         main = response.css("#main-content")[0]
         node = main.css(".node")[0]
 
-        # TODO: extract the text from node_content
-        html_content = node.css(".node__content").get()
-        text_content = extract(
-            html_content,
-            output_format="markdown",
-            include_links=False,
-            include_tables=True,
-            include_formatting=False)
+        # Save related link URLs
+        related_links = node.css('.related-content a::attr("href")').getall()
+
+        # TODO: extract the text from main content
+        node_content = node.css(".node__content")[0]
+        node_paragraph_container = node_content.css(".node__paragraphs")[0]
+        node_paragraphs = node_paragraph_container.css(":scope > .paragraph")
+
+
+        for paragraph in node_paragraphs:
+            # skip table of content
+            if has_class(paragraph, "paragraph--type--pt-toc"):
+                continue
+
+            if has_class(paragraph, "paragraph--type--pt-faq-list"):
+                faqs = paragraph.css(".faq")
+
+                for faq in faqs:
+                    faq_title = faq.css(".faq__title::text").get().strip()
+                    faq_content_html = faq.css(".faq__content").get()
+                    faq_content_text = extract_content(faq_content_html)
+
+                    # save the data to the database
+                    yield DocumentItem(
+                        source_url=response.url,
+                        language=language,
+                        date=date,
+                        category=title,
+                        description=description,
+                        title=faq_title,
+                        html=faq_content_html,
+                        content=faq_content_text,
+                        related_links=related_links
+                    )
+
+            elif has_class(paragraph, "paragraph--type--pt-menu-children"):
+                continue
+
+            elif has_class(paragraph, "paragraph--type--pt-text"):
+                continue
+
+            else:
+                print(paragraph.attrib["class"].split())
+
+        # # Recursively follow links
+        # links = node.css("a")
+        # links = set([link for link in links if link.attrib['href'].startswith(f"/{language}") or
+        #                                     link.attrib['href'].startswith(f"https://www.wikifin.be/{language}")])
+
+        # yield from response.follow_all(links, self.parse_content_page)
 
         # Recursively follow links
         links = node.css("a")
-        links = [link for link in links if link.attrib['href'].startswith(f"/{language}") or
-                                            link.attrib['href'].startswith(f"https://www.wikifin.be/{language}")]
-
+        links = set([link for link in links if (link.attrib['href'].startswith(f"/{language}") or
+                                            link.attrib['href'].startswith(f"https://www.wikifin.be/{language}"))
+                                            and ('faq' in link.attrib['href'])])
+        
         yield from response.follow_all(links, self.parse_content_page)
-
-        # Save related link URLs
-        related_links = node.css('.related-content a::attr("href")').getall()
-        related_links = ", ".join(related_links)
-
-        # save the data to the database
-        yield DocumentItem(
-            source_url=response.url,
-            language=language,
-            title=title,
-            description=description,
-            date=date,
-            html=html_content,
-            content=text_content,
-            related_links=related_links
-        )
-
-        #     paragraphs = []
-        #     links = []
-
-        #     if has_class(node, "node--type-ct-faq"):
-        #         header = node_content.css(".faq__header")[0]
-        #         title = header.css(".faq__title::text").get().strip()
-
-        #         paragraphs_container = node_content.css(".faq__content")[0]
-        #         paragraphs = paragraphs_container.css(".paragraph")
-
-        #     elif has_class(node, "node--type-ct-page"):
-        #         header = node_content.css(".node__header")[0]
-        #         title = header.css(".node__title::text").get().strip()
-
-        #         paragraphs_container = node_content.css(".node__paragraphs")[0]
-        #         paragraphs = paragraphs_container.css(".paragraph")
-        #     else:
-        #         print("=============================================")
-        #         print("DIFFERENT NODE TYPE")
-        #         print("NODE CLASSES: ", node.attrib["class"].split())
-        #         print("==============================================")
-        #         continue
-
-        #     text_content = ""
-        #     for paragraph in paragraphs:
-        #         # skip table of content
-        #         if has_class(paragraph, 'paragraph--type--pt-toc'):
-        #             continue
-
-                    # if has_class
-
-        #         # retrieve all text content
-        #         if has_class(paragraph, 'paragraph--type--pt-text'):
-        #             text = " ".join(paragraph.xpath(".//text()").getall()).strip()
-        #             text_content += "\n" + text
-
-        #         paragraph_links = paragraph.css("a")
-        #         paragraph_links = [link for link in paragraph_links if
-        #                            link.attrib['href'].startswith(f"/{language}") or
-        #                            link.attrib['href'].startswith(f"https://www.wikifin.be/{language}")]
-        #         links.extend(paragraph_links)
-
-        #     yield from response.follow_all(links, self.parse_content_page)
-            
-        #     yield DocumentItem(
-        #         source_url=response.url,
-        #         language=language,
-        #         title=title,
-        #         content=text_content,
-        #         content_html=content_html
-        #     )

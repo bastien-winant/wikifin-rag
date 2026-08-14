@@ -14,15 +14,17 @@ class SQLiteUploadPipeline:
 
         self.cur.execute(
             f"""CREATE TABLE IF NOT EXISTS {self.collection_name} (
-                source_url TEXT PRIMARY KEY,
+                source_url TEXT NOT NULL,
                 language TEXT,
-                title TEXT,
-                description TEXT,
                 date TEXT,
+                category TEXT,
+                description TEXT,
+                title TEXT,
                 html TEXT,
                 content TEXT,
                 embedding vector(768),
-                related_links TEXT[]
+                related_links TEXT[],
+                PRIMARY KEY (category, title)
             );"""
         )
 
@@ -40,16 +42,17 @@ class SQLiteUploadPipeline:
         adapter = ItemAdapter(item)
         
         self.cur.execute(
-            f"""INSERT INTO {self.collection_name} (source_url, language, title, description, date, html, related_links)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (source_url) DO NOTHING;
+            f"""INSERT INTO {self.collection_name} (source_url, language, date, category, description, title, html, content, related_links)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (category, title) DO NOTHING;
             """,
             (
                 adapter.get("source_url"),
                 adapter.get("language"),
-                adapter.get("title"),
-                adapter.get("description"),
                 adapter.get("date"),
+                adapter.get("category"),
+                adapter.get("description"),
+                adapter.get("title"),
                 adapter.get("html"),
                 adapter.get("content"),
                 adapter.get("related_links")
