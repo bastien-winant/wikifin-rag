@@ -38,10 +38,10 @@ class PagesSpider(scrapy.Spider):
         else:
             urls = urlset.xpath(".//url/link").getall()
 
-        yield from response.follow_all(set(urls[:5]), callback=self.parse_content_page)
+        # yield from response.follow_all(set(urls[:20]), callback=self.parse_content_page)
 
-        # faq_urls = [url for url in urls if 'faq' in url.attrib['href']]
-        # yield from response.follow_all(set(faq_urls), callback=self.parse_content_page)
+        faq_urls = [url for url in urls if 'faq' in url.attrib['href']]
+        yield from response.follow_all(set(faq_urls), callback=self.parse_content_page)
 
     def parse_content_page(self, response):
         language = getattr(self, "language", None)
@@ -50,7 +50,7 @@ class PagesSpider(scrapy.Spider):
         html = response.text
         metadata = extract_metadata(html).as_dict()
 
-        title = metadata.get('title')
+        category = metadata.get('title')
         description = metadata.get('description')
 
         date_str = metadata.get('date')
@@ -64,7 +64,7 @@ class PagesSpider(scrapy.Spider):
         # Save related link URLs
         related_links = node.css('.related-content a::attr("href")').getall()
 
-        # TODO: extract the text from main content
+        # extract the text from main content
         node_content = node.css(".node__content")[0]
         node_paragraph_container = node_content.css(".node__paragraphs")[0]
         node_paragraphs = node_paragraph_container.css(":scope > .paragraph")
@@ -79,29 +79,29 @@ class PagesSpider(scrapy.Spider):
                 faqs = paragraph.css(".faq")
 
                 for faq in faqs:
-                    faq_title = faq.css(".faq__title::text").get().strip()
-                    faq_content_html = faq.css(".faq__content").get()
-                    faq_content_text = extract_content(faq_content_html)
+                    title = faq.css(".faq__title::text").get().strip()
+                    content_html = faq.css(".faq__content").get()
+                    content_text = extract_content(content_html)
 
                     # save the data to the database
                     yield DocumentItem(
                         source_url=response.url,
                         language=language,
                         date=date,
-                        category=title,
+                        category=category,
                         description=description,
-                        title=faq_title,
-                        html=faq_content_html,
-                        content=faq_content_text,
+                        title=title,
+                        html=content_html,
+                        content=content_text,
                         related_links=related_links
                     )
 
             elif has_class(paragraph, "paragraph--type--pt-menu-children"):
-                continue
+                pass
 
             elif has_class(paragraph, "paragraph--type--pt-text"):
-                continue
-
+                pass
+            
             else:
                 print(paragraph.attrib["class"].split())
 
