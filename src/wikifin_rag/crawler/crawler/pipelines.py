@@ -52,7 +52,7 @@ class SQLiteUploadPipeline:
                 adapter.get("date"),
                 adapter.get("html"),
                 adapter.get("content"),
-                adapter.get("related_urls")
+                adapter.get("related_links")
             )
         )
 
