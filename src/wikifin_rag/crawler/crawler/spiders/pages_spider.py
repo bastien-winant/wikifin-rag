@@ -38,10 +38,10 @@ class PagesSpider(scrapy.Spider):
         else:
             urls = urlset.xpath(".//url/link").getall()
 
-        # yield from response.follow_all(set(urls[:20]), callback=self.parse_content_page)
+        yield from response.follow_all(set(urls[:-100]), callback=self.parse_content_page)
 
-        faq_urls = [url for url in urls if 'faq' in url.attrib['href']]
-        yield from response.follow_all(set(faq_urls), callback=self.parse_content_page)
+        # faq_urls = [url for url in urls if 'faq' in url.attrib['href']]
+        # yield from response.follow_all(set(faq_urls), callback=self.parse_content_page)
 
     def parse_content_page(self, response):
         language = getattr(self, "language", None)
@@ -98,9 +98,26 @@ class PagesSpider(scrapy.Spider):
 
             elif has_class(paragraph, "paragraph--type--pt-menu-children"):
                 pass
-
+            
             elif has_class(paragraph, "paragraph--type--pt-text"):
-                pass
+                content_html = paragraph.css(".text-content").get()
+                content_text = extract_content(content_html)
+
+                if len(paragraph.css(".text-content")) != 1:
+                    print(f"NUMBER OF TEXT CONTENT ELEMENTS INSIDE THE PARAGRAPH: {len(paragraph.css(".text-content"))}")
+
+                # save the data to the database
+                yield DocumentItem(
+                    source_url=response.url,
+                    language=language,
+                    date=date,
+                    category=category,
+                    description=description,
+                    title=category,
+                    html=content_html,
+                    content=content_text,
+                    related_links=related_links
+                )
             
             else:
                 print(paragraph.attrib["class"].split())
@@ -112,10 +129,10 @@ class PagesSpider(scrapy.Spider):
 
         # yield from response.follow_all(links, self.parse_content_page)
 
-        # Recursively follow links
-        links = node.css("a")
-        links = set([link for link in links if (link.attrib['href'].startswith(f"/{language}") or
-                                            link.attrib['href'].startswith(f"https://www.wikifin.be/{language}"))
-                                            and ('faq' in link.attrib['href'])])
+        # # Recursively follow links
+        # links = node.css("a")
+        # links = set([link for link in links if (link.attrib['href'].startswith(f"/{language}") or
+        #                                     link.attrib['href'].startswith(f"https://www.wikifin.be/{language}"))
+        #                                     and ('faq' in link.attrib['href'])])
         
-        yield from response.follow_all(links, self.parse_content_page)
+        # yield from response.follow_all(links, self.parse_content_page)
