@@ -4,7 +4,6 @@ from datetime import date as Date
 
 @dataclass
 class DocumentItem:
-    document_id: str
     chunk_id: str
     source_url: str
     language: str | None = None

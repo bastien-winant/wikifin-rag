@@ -43,10 +43,8 @@ class PagesSpider(scrapy.Spider):
         else:
             urls = urlset.xpath(".//url/link").getall()
 
-        yield from response.follow_all(set(urls[:60]), callback=self.parse_content_page)
+        yield from response.follow_all(set(urls), callback=self.parse_content_page)
 
-        # faq_urls = [url for url in urls if 'faq' in url.attrib['href']]
-        # yield from response.follow_all(set(faq_urls), callback=self.parse_content_page)
 
     def parse_content_page(self, response):
         document_id = generate_id(response.url)
@@ -96,7 +94,6 @@ class PagesSpider(scrapy.Spider):
                     # save the data to the database
                     chunk_id = generate_id(document_id + content_text)
                     yield DocumentItem(
-                        document_id=document_id,
                         chunk_id=chunk_id,
                         source_url=response.url,
                         language=language,
@@ -122,7 +119,6 @@ class PagesSpider(scrapy.Spider):
                             # save the data to the database
                             chunk_id = generate_id(document_id + "\n".join(content_text))
                             yield DocumentItem(
-                                document_id=document_id,
                                 chunk_id=chunk_id,
                                 source_url=response.url,
                                 language=language,
@@ -152,7 +148,6 @@ class PagesSpider(scrapy.Spider):
                 # save the data to the database
                 chunk_id = generate_id(document_id + "\n".join(content_text))
                 yield DocumentItem(
-                    document_id=document_id,
                     chunk_id=chunk_id,
                     source_url=response.url,
                     language=language,
@@ -168,9 +163,9 @@ class PagesSpider(scrapy.Spider):
             else:
                 print(paragraph.attrib["class"].split())
 
-        # # Recursively follow links
-        # links = node.css("a")
-        # links = set([link for link in links if link.attrib['href'].startswith(f"/{language}") or
-        #                                     link.attrib['href'].startswith(f"https://www.wikifin.be/{language}")])
+        # Recursively follow links
+        links = node.css("a")
+        links = set([link for link in links if link.attrib['href'].startswith(f"/{language}") or
+                                            link.attrib['href'].startswith(f"https://www.wikifin.be/{language}")])
 
-        # yield from response.follow_all(links, self.parse_content_page)
+        yield from response.follow_all(links, self.parse_content_page)

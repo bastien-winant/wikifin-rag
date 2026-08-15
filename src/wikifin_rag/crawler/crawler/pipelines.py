@@ -14,7 +14,6 @@ class SQLiteUploadPipeline:
 
         self.cur.execute(
             f"""CREATE TABLE IF NOT EXISTS {self.collection_name} (
-                document_id TEXT NOT NULL,
                 chunk_id TEXT PRIMARY KEY,
                 source_url TEXT NOT NULL,
                 language TEXT,
@@ -43,12 +42,11 @@ class SQLiteUploadPipeline:
         adapter = ItemAdapter(item)
         
         self.cur.execute(
-            f"""INSERT INTO {self.collection_name} (document_id, chunk_id, source_url, language, date, category, description, title, html, content, related_links)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            f"""INSERT INTO {self.collection_name} (chunk_id, source_url, language, date, category, description, title, html, content, related_links)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (chunk_id) DO NOTHING;
             """,
             (
-                adapter.get("document_id"),
                 adapter.get("chunk_id"),
                 adapter.get("source_url"),
                 adapter.get("language"),
