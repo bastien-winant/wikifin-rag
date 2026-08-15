@@ -16,5 +16,6 @@ def get_db_connection():
         port=db_port,
         dbname=db_name,
         user=db_user,
-        password=db_password
+        password=db_password,
+        autocommit=True
     )

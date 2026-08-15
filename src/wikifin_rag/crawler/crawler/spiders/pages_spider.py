@@ -3,6 +3,7 @@ from crawler.items import DocumentItem
 from trafilatura import extract_metadata
 from bs4 import BeautifulSoup
 from datetime import datetime
+from hashlib import sha256
 
 
 def has_class(selector, classname):
@@ -10,9 +11,13 @@ def has_class(selector, classname):
     return classname in selector_classes
 
 
-def extract_content(html_str):
+def extract_content(html_str, sep=" "):
     soup = BeautifulSoup(html_str, "html.parser")
-    return soup.get_text(" ", strip=True)
+    return soup.get_text(sep, strip=True)
+
+
+def generate_id(value):
+    return sha256(value.encode()).hexdigest()[:16]
 
 
 class PagesSpider(scrapy.Spider):
@@ -38,12 +43,14 @@ class PagesSpider(scrapy.Spider):
         else:
             urls = urlset.xpath(".//url/link").getall()
 
-        yield from response.follow_all(set(urls[:-100]), callback=self.parse_content_page)
+        yield from response.follow_all(set(urls[:60]), callback=self.parse_content_page)
 
         # faq_urls = [url for url in urls if 'faq' in url.attrib['href']]
         # yield from response.follow_all(set(faq_urls), callback=self.parse_content_page)
 
     def parse_content_page(self, response):
+        document_id = generate_id(response.url)
+
         language = getattr(self, "language", None)
 
         # extract metadata
@@ -75,7 +82,10 @@ class PagesSpider(scrapy.Spider):
             if has_class(paragraph, "paragraph--type--pt-toc"):
                 continue
 
-            if has_class(paragraph, "paragraph--type--pt-faq-list"):
+            elif has_class(paragraph, "paragraph--type--pt-menu-children"):
+                continue
+
+            elif has_class(paragraph, "paragraph--type--pt-faq-list"):
                 faqs = paragraph.css(".faq")
 
                 for faq in faqs:
@@ -84,7 +94,10 @@ class PagesSpider(scrapy.Spider):
                     content_text = extract_content(content_html)
 
                     # save the data to the database
+                    chunk_id = generate_id(document_id + content_text)
                     yield DocumentItem(
+                        document_id=document_id,
+                        chunk_id=chunk_id,
                         source_url=response.url,
                         language=language,
                         date=date,
@@ -96,26 +109,59 @@ class PagesSpider(scrapy.Spider):
                         related_links=related_links
                     )
 
-            elif has_class(paragraph, "paragraph--type--pt-menu-children"):
-                pass
-            
             elif has_class(paragraph, "paragraph--type--pt-text"):
-                content_html = paragraph.css(".text-content").get()
-                content_text = extract_content(content_html)
+                title = category
+                content_html = []
+                content_text = []
 
-                if len(paragraph.css(".text-content")) != 1:
-                    print(f"NUMBER OF TEXT CONTENT ELEMENTS INSIDE THE PARAGRAPH: {len(paragraph.css(".text-content"))}")
+                content_elements = paragraph.css(".text-content > *")
+
+                for element in content_elements:
+                    if element.root.tag == "h2":
+                        if content_html:
+                            # save the data to the database
+                            chunk_id = generate_id(document_id + "\n".join(content_text))
+                            yield DocumentItem(
+                                document_id=document_id,
+                                chunk_id=chunk_id,
+                                source_url=response.url,
+                                language=language,
+                                date=date,
+                                category=category,
+                                description=description,
+                                title=title,
+                                html="\n".join(content_html),
+                                content="\n".join(content_text),
+                                related_links=related_links
+                            )
+
+                        title = element.css("::text").get()
+                        content_html = []
+                        content_text = []
+                    else:
+                        html_str = element.get()
+                        if element.root.tag in ["ul", "ol"]:
+                            text_str = extract_content(html_str, sep=", ")
+                        elif element.root.tag in ["h3", "h4", "h5", "h6"]:
+                            text_str = "# " + extract_content(html_str).upper()
+                        else:
+                            text_str = extract_content(html_str)
+                        content_html.append(html_str)
+                        content_text.append(text_str)
 
                 # save the data to the database
+                chunk_id = generate_id(document_id + "\n".join(content_text))
                 yield DocumentItem(
+                    document_id=document_id,
+                    chunk_id=chunk_id,
                     source_url=response.url,
                     language=language,
                     date=date,
                     category=category,
                     description=description,
-                    title=category,
-                    html=content_html,
-                    content=content_text,
+                    title=title,
+                    html="\n".join(content_html),
+                    content="\n".join(content_text),
                     related_links=related_links
                 )
             
@@ -127,12 +173,4 @@ class PagesSpider(scrapy.Spider):
         # links = set([link for link in links if link.attrib['href'].startswith(f"/{language}") or
         #                                     link.attrib['href'].startswith(f"https://www.wikifin.be/{language}")])
 
-        # yield from response.follow_all(links, self.parse_content_page)
-
-        # # Recursively follow links
-        # links = node.css("a")
-        # links = set([link for link in links if (link.attrib['href'].startswith(f"/{language}") or
-        #                                     link.attrib['href'].startswith(f"https://www.wikifin.be/{language}"))
-        #                                     and ('faq' in link.attrib['href'])])
-        
         # yield from response.follow_all(links, self.parse_content_page)
