@@ -1,6 +1,7 @@
 from itemadapter import ItemAdapter
 from wikifin_rag.ingest import get_db_connection
 from psycopg import sql
+from dataclasses import astuple
 
 class SQLiteUploadPipeline:
     collection_name = "document_chunks"
@@ -48,9 +49,10 @@ class SQLiteUploadPipeline:
         self.con.close()
 
     def process_item(self, item):
-        adapter = ItemAdapter(item)
-
-        self.cur.execute(
+        if item.length() == 0:
+            return "No elements in the batch."
+        
+        self.cur.executemany(
             sql.SQL(
                 """
                 INSERT INTO {} (chunk_id, source_url, language, date, category, description, title, html, content, related_links)
@@ -58,18 +60,8 @@ class SQLiteUploadPipeline:
                 ON CONFLICT (chunk_id) DO NOTHING;
                 """
             ).format(self.table_identifier),
-            (
-                adapter.get("chunk_id"),
-                adapter.get("source_url"),
-                adapter.get("language"),
-                adapter.get("date"),
-                adapter.get("category"),
-                adapter.get("description"),
-                adapter.get("title"),
-                adapter.get("html"),
-                adapter.get("content"),
-                adapter.get("related_links")
-            )
+            [astuple(chunk) for chunk in item.chunks],
+            returning=True
         )
 
-        return "New row inserted in the DB"
+        return f"Upserted {self.cur.rowcount} chunks."

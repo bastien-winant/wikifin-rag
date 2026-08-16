@@ -1,5 +1,5 @@
 import scrapy
-from crawler.items import DocumentItem
+from crawler.items import Batch
 from trafilatura import extract_metadata
 from bs4 import BeautifulSoup
 from datetime import datetime
@@ -31,6 +31,13 @@ class PagesSpider(scrapy.Spider):
         }
     }
 
+
+    def __init__(self, batch_size=10, **kwargs):
+        super().__init__(**kwargs)
+        self.batch_size = batch_size
+        self.batch = Batch([])
+
+
     def parse(self, response):
         response.selector.remove_namespaces()
 
@@ -43,7 +50,7 @@ class PagesSpider(scrapy.Spider):
         else:
             urls = urlset.xpath(".//url/link").getall()
 
-        yield from response.follow_all(set(urls), callback=self.parse_content_page)
+        yield from response.follow_all(set(urls[-30:]), callback=self.parse_content_page)
 
 
     def parse_content_page(self, response):
@@ -86,25 +93,31 @@ class PagesSpider(scrapy.Spider):
             elif has_class(paragraph, "paragraph--type--pt-faq-list"):
                 faqs = paragraph.css(".faq")
 
+                # save each question/pair as a chunk
                 for faq in faqs:
+                    # retrieve the text content
                     title = faq.css(".faq__title::text").get().strip()
                     content_html = faq.css(".faq__content").get()
                     content_text = extract_content(content_html)
 
-                    # save the data to the database
+                    # add the chunk to the batch
                     chunk_id = generate_id(document_id + content_text)
-                    yield DocumentItem(
-                        chunk_id=chunk_id,
-                        source_url=response.url,
-                        language=language,
-                        date=date,
-                        category=category,
-                        description=description,
-                        title=title,
-                        html=content_html,
-                        content=content_text,
-                        related_links=related_links
-                    )
+                    self.batch.add_item({
+                        "chunk_id": chunk_id,
+                        "source_url": response.url,
+                        "language": language,
+                        "date": date,
+                        "category": category,
+                        "description": description,
+                        "title": title,
+                        "html": content_html,
+                        "content": content_text,
+                        "related_links": related_links
+                    })
+
+                    if self.batch.length() == self.batch_size:
+                        yield self.batch
+                        self.batch = Batch([])
 
             elif has_class(paragraph, "paragraph--type--pt-text"):
                 title = category
@@ -113,27 +126,35 @@ class PagesSpider(scrapy.Spider):
 
                 content_elements = paragraph.css(".text-content > *")
 
+                # save all the paragraph text as chunks
                 for element in content_elements:
+                    # if there is an h2 title, upload and create a new chunk
                     if element.root.tag == "h2":
                         if content_html:
-                            # save the data to the database
+                            # add the chunk to the batch
                             chunk_id = generate_id(document_id + "\n".join(content_text))
-                            yield DocumentItem(
-                                chunk_id=chunk_id,
-                                source_url=response.url,
-                                language=language,
-                                date=date,
-                                category=category,
-                                description=description,
-                                title=title,
-                                html="\n".join(content_html),
-                                content="\n".join(content_text),
-                                related_links=related_links
-                            )
+                            self.batch.add_item({
+                                "chunk_id": chunk_id,
+                                "source_url": response.url,
+                                "language": language,
+                                "date": date,
+                                "category": category,
+                                "description": description,
+                                "title": title,
+                                "html": "\n".join(content_html),
+                                "content": "\n".join(content_text),
+                                "related_links": related_links
+                            })
+
+                            if self.batch.length() == self.batch_size:
+                                yield self.batch
+                                self.batch = Batch([])
 
                         title = element.css("::text").get()
                         content_html = []
                         content_text = []
+
+                    # accumulate non-title text into current chunk
                     else:
                         html_str = element.get()
                         if element.root.tag in ["ul", "ol"]:
@@ -145,23 +166,27 @@ class PagesSpider(scrapy.Spider):
                         content_html.append(html_str)
                         content_text.append(text_str)
 
-                # save the data to the database
+                # add the chunk to the batch
                 chunk_id = generate_id(document_id + "\n".join(content_text))
-                yield DocumentItem(
-                    chunk_id=chunk_id,
-                    source_url=response.url,
-                    language=language,
-                    date=date,
-                    category=category,
-                    description=description,
-                    title=title,
-                    html="\n".join(content_html),
-                    content="\n".join(content_text),
-                    related_links=related_links
-                )
-            
-            else:
-                print(paragraph.attrib["class"].split())
+                self.batch.add_item({
+                    "chunk_id": chunk_id,
+                    "source_url": response.url,
+                    "language": language,
+                    "date": date,
+                    "category": category,
+                    "description": description,
+                    "title": title,
+                    "html": "\n".join(content_html),
+                    "content": "\n".join(content_text),
+                    "related_links": related_links
+                })
+
+                if self.batch.length() == self.batch_size:
+                    yield self.batch
+                    self.batch = Batch([])
+
+        yield self.batch
+        self.batch = Batch([])
 
         # Recursively follow links
         links = node.css("a")
