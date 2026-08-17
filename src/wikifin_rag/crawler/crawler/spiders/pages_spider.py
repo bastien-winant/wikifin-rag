@@ -32,9 +32,10 @@ class PagesSpider(scrapy.Spider):
     }
 
 
-    def __init__(self, batch_size=10, **kwargs):
+    def __init__(self, batch_size=100, chunk_size=2000, **kwargs):
         super().__init__(**kwargs)
         self.batch_size = batch_size
+        self.chunk_size = chunk_size
         self.batch = Batch([])
 
 
@@ -50,7 +51,7 @@ class PagesSpider(scrapy.Spider):
         else:
             urls = urlset.xpath(".//url/link").getall()
 
-        yield from response.follow_all(set(urls[-30:]), callback=self.parse_content_page)
+        yield from response.follow_all(set(urls), callback=self.parse_content_page)
 
 
     def parse_content_page(self, response):
@@ -150,21 +151,52 @@ class PagesSpider(scrapy.Spider):
                                 yield self.batch
                                 self.batch = Batch([])
 
+                        # reinitialize the running chunk containers
                         title = element.css("::text").get()
                         content_html = []
                         content_text = []
 
                     # accumulate non-title text into current chunk
                     else:
+                        # get the next html as a string
                         html_str = element.get()
+
+                        # if the element is a list, store strings as CSVs
                         if element.root.tag in ["ul", "ol"]:
                             text_str = extract_content(html_str, sep=", ")
+                        # if the element is a header, prepend a pound sign
                         elif element.root.tag in ["h3", "h4", "h5", "h6"]:
-                            text_str = "# " + extract_content(html_str).upper()
+                            text_str = f"\n\n# {extract_content(html_str).upper()}\n"
                         else:
                             text_str = extract_content(html_str)
+
                         content_html.append(html_str)
                         content_text.append(text_str)
+
+                        # length-based chunking
+                        if len(" ".join(content_text)) >= self.chunk_size:
+                            print("LONG DOCUMENT CHUNKING")
+                            chunk_id = generate_id(document_id + "\n".join(content_text))
+                            self.batch.add_item({
+                                "chunk_id": chunk_id,
+                                "source_url": response.url,
+                                "language": language,
+                                "date": date,
+                                "category": category,
+                                "description": description,
+                                "title": title,
+                                "html": "\n".join(content_html),
+                                "content": "\n".join(content_text),
+                                "related_links": related_links
+                            })
+            
+                            if self.batch.length() == self.batch_size:
+                                yield self.batch
+                                self.batch = Batch([])
+
+                            content_html = [html_str]
+                            content_text = [text_str]
+
 
                 # add the chunk to the batch
                 chunk_id = generate_id(document_id + "\n".join(content_text))
