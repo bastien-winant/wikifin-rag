@@ -53,14 +53,15 @@ class DBClient():
                     chunk_id TEXT PRIMARY KEY,
                     source_url TEXT NOT NULL,
                     language TEXT,
-                    date TEXT,
+                    updated_on DATE,
                     category TEXT,
                     description TEXT,
                     title TEXT,
                     html TEXT,
                     content TEXT,
                     embedding vector(768),
-                    related_links TEXT[]
+                    related_links TEXT[],
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 );
                 """
             ).format(self.table_identifier)
@@ -80,12 +81,12 @@ class DBClient():
         self.cur.executemany(
             sql.SQL(
                 """
-                INSERT INTO {} (chunk_id, source_url, language, date, category, description, title, html, content, related_links)
+                INSERT INTO {} (chunk_id, source_url, language, updated_on, category, description, title, html, content, related_links)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (chunk_id) DO NOTHING;
                 """
             ).format(self.table_identifier),
-            [astuple(chunk) for chunk in batch.chunks],
+            [astuple(chunk) for chunk in batch],
             returning=True
         )
 

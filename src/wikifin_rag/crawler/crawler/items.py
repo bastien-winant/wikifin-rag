@@ -7,7 +7,7 @@ class Chunk:
     chunk_id: str
     source_url: str
     language: str | None = None
-    date: Date | None = None
+    updated_on: Date | None = None
     category: str | None = None
     description: str | None = None
     title: str | None = None
@@ -20,8 +20,8 @@ class Chunk:
 class Batch:
     chunks: list[Chunk]
 
-    def clear_items(self):
-        self.chunks.clear()
+    def clear_chunks(self):
+        self.chunks = []
 
     def add_item(self, data):
         self.chunks.append(Chunk(**data))

@@ -24,13 +24,6 @@ class PagesSpider(scrapy.Spider):
     name = "pages"
     start_urls = ["https://www.wikifin.be/page/sitemap.xml"]
 
-    custom_settings = {
-        'DOWNLOAD_DELAY': 30,
-        'ITEM_PIPELINES': {
-            "crawler.pipelines.SQLiteUploadPipeline": 300
-        }
-    }
-
 
     def __init__(self, batch_size=100, chunk_size=2000, **kwargs):
         super().__init__(**kwargs)
@@ -107,7 +100,7 @@ class PagesSpider(scrapy.Spider):
                         "chunk_id": chunk_id,
                         "source_url": response.url,
                         "language": language,
-                        "date": date,
+                        "updated_on": date,
                         "category": category,
                         "description": description,
                         "title": title,
@@ -117,8 +110,8 @@ class PagesSpider(scrapy.Spider):
                     })
 
                     if self.batch.length() == self.batch_size:
-                        yield self.batch
-                        self.batch = Batch([])
+                        yield self.batch.chunks
+                        self.batch.clear_chunks()
 
             elif has_class(paragraph, "paragraph--type--pt-text"):
                 title = category
@@ -138,7 +131,7 @@ class PagesSpider(scrapy.Spider):
                                 "chunk_id": chunk_id,
                                 "source_url": response.url,
                                 "language": language,
-                                "date": date,
+                                "updated_on": date,
                                 "category": category,
                                 "description": description,
                                 "title": title,
@@ -148,8 +141,8 @@ class PagesSpider(scrapy.Spider):
                             })
 
                             if self.batch.length() == self.batch_size:
-                                yield self.batch
-                                self.batch = Batch([])
+                                yield self.batch.chunks
+                                self.batch.clear_chunks()
 
                         # reinitialize the running chunk containers
                         title = element.css("::text").get()
@@ -181,7 +174,7 @@ class PagesSpider(scrapy.Spider):
                                 "chunk_id": chunk_id,
                                 "source_url": response.url,
                                 "language": language,
-                                "date": date,
+                                "updated_on": date,
                                 "category": category,
                                 "description": description,
                                 "title": title,
@@ -191,8 +184,8 @@ class PagesSpider(scrapy.Spider):
                             })
             
                             if self.batch.length() == self.batch_size:
-                                yield self.batch
-                                self.batch = Batch([])
+                                yield self.batch.chunks
+                                self.batch.clear_chunks()
 
                             content_html = [html_str]
                             content_text = [text_str]
@@ -204,7 +197,7 @@ class PagesSpider(scrapy.Spider):
                     "chunk_id": chunk_id,
                     "source_url": response.url,
                     "language": language,
-                    "date": date,
+                    "updated_on": date,
                     "category": category,
                     "description": description,
                     "title": title,
@@ -214,11 +207,11 @@ class PagesSpider(scrapy.Spider):
                 })
 
                 if self.batch.length() == self.batch_size:
-                    yield self.batch
-                    self.batch = Batch([])
+                    yield self.batch.chunks
+                    self.batch.clear_chunks()
 
-        yield self.batch
-        self.batch = Batch([])
+        yield self.batch.chunks
+        self.batch.clear_chunks()
 
         # Recursively follow links
         links = node.css("a")
