@@ -222,7 +222,7 @@ class PagesSpider(scrapy.Spider):
 
         # Recursively follow links
         links = node.css("a")
-        links = set([link for link in links if link.attrib['href'].startswith(f"/{language}") or
-                                            link.attrib['href'].startswith(f"https://www.wikifin.be/{language}")])
+        links = set([link for link in links if link.attrib.get('href', "").startswith(f"/{language}") or
+                                            link.attrib.get('href', "").startswith(f"https://www.wikifin.be/{language}")])
 
         yield from response.follow_all(links, self.parse_content_page)
