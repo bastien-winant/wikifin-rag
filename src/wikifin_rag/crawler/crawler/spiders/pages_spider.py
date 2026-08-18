@@ -4,7 +4,7 @@ from trafilatura import extract_metadata
 from bs4 import BeautifulSoup
 from datetime import datetime
 from hashlib import sha256
-from wikifin_rag.db_client import DBClient
+from wikifin_rag.db_client import PostgresClient
 
 
 def has_class(selector, classname):
@@ -32,7 +32,7 @@ class PagesSpider(scrapy.Spider):
         self.batch_size = int(batch_size)
         self.chunk_size = int(chunk_size)
 
-        self.db_client = DBClient()
+        self.db_client = PostgresClient()
         self.batch = Batch(
             chunks=[],
             size=self.batch_size,
@@ -55,7 +55,7 @@ class PagesSpider(scrapy.Spider):
         if language:
             urls = urlset.xpath(f".//url/link[@hreflang='{language.lower()}']")
         else:
-            urls = urlset.xpath(".//url/link").getall()
+            urls = urlset.xpath(".//url/link[@hreflang='fr' or @hreflang='nl']")
 
         yield from response.follow_all(set(urls), callback=self.parse_content_page)
 
@@ -63,7 +63,7 @@ class PagesSpider(scrapy.Spider):
     def parse_content_page(self, response):
         document_id = generate_id(response.url)
 
-        language = getattr(self, "language", None)
+        language = "fr" if "/fr/" in response.url else "nl"
 
         # extract metadata
         html = response.text

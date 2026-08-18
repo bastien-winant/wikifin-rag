@@ -5,7 +5,7 @@ from dataclasses import astuple
 from wikifin_rag.embedder import Embedder
 
 
-class DBClient():
+class PostgresClient():
     def __init__(self, table_name="document_chunks", embedder=Embedder()):
         load_dotenv(override=True)
 
@@ -18,6 +18,7 @@ class DBClient():
         self.db_password = os.environ['POSTGRES_PASSWORD']
 
         self.embedder = embedder
+
 
     def open_connection(self, autocommit=True):
         try:
@@ -32,14 +33,16 @@ class DBClient():
 
             self.cur = self.con.cursor()
         except:
-            print("Unable to open database connection.")
+            print("Unable to open the database connection.")
+
 
     def close_connection(self):
         try:
             self.cur.close()
             self.con.close()
         except:
-            print("Unable to close database connection.")
+            print("Unable to close the database connection.")
+
 
     def create_table(self, drop=False):
         if drop:
