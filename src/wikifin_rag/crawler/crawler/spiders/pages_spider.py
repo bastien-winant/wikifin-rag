@@ -26,7 +26,7 @@ class PagesSpider(scrapy.Spider):
     start_urls = ["https://www.wikifin.be/page/sitemap.xml"]
 
 
-    def __init__(self, batch_size=8, chunk_size=2000, **kwargs):
+    def __init__(self, batch_size=10, chunk_size=2000, **kwargs):
         super().__init__(**kwargs)
 
         self.batch_size = int(batch_size)
@@ -57,7 +57,7 @@ class PagesSpider(scrapy.Spider):
         else:
             urls = urlset.xpath(".//url/link").getall()
 
-        yield from response.follow_all(set(urls[-20:]), callback=self.parse_content_page)
+        yield from response.follow_all(set(urls), callback=self.parse_content_page)
 
 
     def parse_content_page(self, response):
@@ -206,12 +206,12 @@ class PagesSpider(scrapy.Spider):
                     "related_links": related_links
                 })
 
-        # # Recursively follow links
-        # links = node.css("a")
-        # links = set([link for link in links if link.attrib.get('href', "").startswith(f"/{language}") or
-        #                                     link.attrib.get('href', "").startswith(f"https://www.wikifin.be/{language}")])
+        # Recursively follow links
+        links = node.css("a")
+        links = set([link for link in links if link.attrib.get('href', "").startswith(f"/{language}") or
+                                            link.attrib.get('href', "").startswith(f"https://www.wikifin.be/{language}")])
 
-        # yield from response.follow_all(links, self.parse_content_page)
+        yield from response.follow_all(links, self.parse_content_page)
 
 
     def closed(self, reason):

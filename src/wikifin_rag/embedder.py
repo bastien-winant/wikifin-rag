@@ -1,7 +1,7 @@
 import numpy as np
 import onnxruntime as ort
 from tokenizers import Tokenizer
-from config import PROJECT_ROOT
+from wikifin_rag.config import PROJECT_ROOT
 
 
 class Embedder:
