@@ -19,12 +19,28 @@ class Chunk:
 @dataclass
 class Batch:
     chunks: list[Chunk]
+    size: int
+    on_full_callback: function | None = None
+    clear_on_full: bool | None = False
 
     def clear_chunks(self):
-        self.chunks = []
+        self.chunks.clear()
 
-    def add_item(self, data):
+    def add_chunk(self, data):
         self.chunks.append(Chunk(**data))
+
+        if self.is_full():
+            if self.on_full_callback:
+                self.on_full_callback(self.chunks)
+
+            if self.clear_on_full:
+                self.clear_chunks()
 
     def length(self):
         return len(self.chunks)
+
+    def is_full(self):
+        return len(self.chunks) >= self.size
+
+    def is_empty(self):
+        return len(self.chunks) == 0

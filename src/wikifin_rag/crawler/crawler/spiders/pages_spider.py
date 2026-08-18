@@ -4,6 +4,7 @@ from trafilatura import extract_metadata
 from bs4 import BeautifulSoup
 from datetime import datetime
 from hashlib import sha256
+from wikifin_rag.db_client import DBClient
 
 
 def has_class(selector, classname):
@@ -25,11 +26,23 @@ class PagesSpider(scrapy.Spider):
     start_urls = ["https://www.wikifin.be/page/sitemap.xml"]
 
 
-    def __init__(self, batch_size=100, chunk_size=2000, **kwargs):
+    def __init__(self, batch_size=8, chunk_size=2000, **kwargs):
         super().__init__(**kwargs)
-        self.batch_size = batch_size
-        self.chunk_size = chunk_size
-        self.batch = Batch([])
+
+        self.batch_size = int(batch_size)
+        self.chunk_size = int(chunk_size)
+
+        self.db_client = DBClient()
+        self.batch = Batch(
+            chunks=[],
+            size=self.batch_size,
+            on_full_callback=self.db_client.insert_batch,
+            clear_on_full=True
+        )
+
+        drop_table = getattr(self, "drop_table", "False").capitalize() == "True"
+        self.db_client.open_connection()
+        self.db_client.create_table(drop=drop_table)
 
 
     def parse(self, response):
@@ -44,7 +57,7 @@ class PagesSpider(scrapy.Spider):
         else:
             urls = urlset.xpath(".//url/link").getall()
 
-        yield from response.follow_all(set(urls), callback=self.parse_content_page)
+        yield from response.follow_all(set(urls[-20:]), callback=self.parse_content_page)
 
 
     def parse_content_page(self, response):
@@ -96,7 +109,7 @@ class PagesSpider(scrapy.Spider):
 
                     # add the chunk to the batch
                     chunk_id = generate_id(document_id + content_text)
-                    self.batch.add_item({
+                    self.batch.add_chunk({
                         "chunk_id": chunk_id,
                         "source_url": response.url,
                         "language": language,
@@ -108,10 +121,6 @@ class PagesSpider(scrapy.Spider):
                         "content": content_text,
                         "related_links": related_links
                     })
-
-                    if self.batch.length() == self.batch_size:
-                        yield self.batch.chunks
-                        self.batch.clear_chunks()
 
             elif has_class(paragraph, "paragraph--type--pt-text"):
                 title = category
@@ -127,7 +136,7 @@ class PagesSpider(scrapy.Spider):
                         if content_html:
                             # add the chunk to the batch
                             chunk_id = generate_id(document_id + "\n".join(content_text))
-                            self.batch.add_item({
+                            self.batch.add_chunk({
                                 "chunk_id": chunk_id,
                                 "source_url": response.url,
                                 "language": language,
@@ -139,10 +148,6 @@ class PagesSpider(scrapy.Spider):
                                 "content": "\n".join(content_text),
                                 "related_links": related_links
                             })
-
-                            if self.batch.length() == self.batch_size:
-                                yield self.batch.chunks
-                                self.batch.clear_chunks()
 
                         # reinitialize the running chunk containers
                         title = element.css("::text").get()
@@ -169,7 +174,7 @@ class PagesSpider(scrapy.Spider):
                         # length-based chunking
                         if len(" ".join(content_text)) >= self.chunk_size:
                             chunk_id = generate_id(document_id + "\n".join(content_text))
-                            self.batch.add_item({
+                            self.batch.add_chunk({
                                 "chunk_id": chunk_id,
                                 "source_url": response.url,
                                 "language": language,
@@ -181,10 +186,6 @@ class PagesSpider(scrapy.Spider):
                                 "content": "\n".join(content_text),
                                 "related_links": related_links
                             })
-            
-                            if self.batch.length() == self.batch_size:
-                                yield self.batch.chunks
-                                self.batch.clear_chunks()
 
                             content_html = [html_str]
                             content_text = [text_str]
@@ -192,7 +193,7 @@ class PagesSpider(scrapy.Spider):
 
                 # add the chunk to the batch
                 chunk_id = generate_id(document_id + "\n".join(content_text))
-                self.batch.add_item({
+                self.batch.add_chunk({
                     "chunk_id": chunk_id,
                     "source_url": response.url,
                     "language": language,
@@ -205,16 +206,19 @@ class PagesSpider(scrapy.Spider):
                     "related_links": related_links
                 })
 
-                if self.batch.length() == self.batch_size:
-                    yield self.batch.chunks
-                    self.batch.clear_chunks()
+        # # Recursively follow links
+        # links = node.css("a")
+        # links = set([link for link in links if link.attrib.get('href', "").startswith(f"/{language}") or
+        #                                     link.attrib.get('href', "").startswith(f"https://www.wikifin.be/{language}")])
 
-        yield self.batch.chunks
-        self.batch.clear_chunks()
+        # yield from response.follow_all(links, self.parse_content_page)
 
-        # Recursively follow links
-        links = node.css("a")
-        links = set([link for link in links if link.attrib.get('href', "").startswith(f"/{language}") or
-                                            link.attrib.get('href', "").startswith(f"https://www.wikifin.be/{language}")])
 
-        yield from response.follow_all(links, self.parse_content_page)
+    def closed(self, reason):
+        if not self.batch.is_empty():
+            print(f"FINAL UPLOAD WITH {self.batch.length()} ITEMS")
+            self.batch.on_full_callback(self.batch.chunks)
+            self.batch.clear_chunks()
+
+        self.db_client.close_connection()
+        self.logger.info(f"Spider closed with reason: {reason}")
