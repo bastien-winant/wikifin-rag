@@ -168,7 +168,6 @@ class PagesSpider(scrapy.Spider):
 
                         # length-based chunking
                         if len(" ".join(content_text)) >= self.chunk_size:
-                            print("LONG DOCUMENT CHUNKING")
                             chunk_id = generate_id(document_id + "\n".join(content_text))
                             self.batch.add_item({
                                 "chunk_id": chunk_id,

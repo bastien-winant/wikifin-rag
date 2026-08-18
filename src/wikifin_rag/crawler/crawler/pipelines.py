@@ -8,7 +8,7 @@ class PostgresUpload:
 
     def open_spider(self):
         self.db_client.open_connection()
-        self.db_client.create_table(drop=True)
+        self.db_client.create_table(drop=False)
 
     def close_spider(self):
         self.db_client.close_connection()
@@ -17,5 +17,5 @@ class PostgresUpload:
         if len(item) == 0:
             return "No elements in the batch."
 
-        updated_rows = self.db_client.insert_batch(item)
-        return f"Upserted {updated_rows} chunks."
+        affected_batches = self.db_client.insert_batch(item)
+        return f"Upserted {affected_batches} batch ({len(item)} rows)."

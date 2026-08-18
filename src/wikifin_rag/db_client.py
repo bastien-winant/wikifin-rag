@@ -34,7 +34,6 @@ class DBClient():
         try:
             self.cur.close()
             self.con.close()
-            self.con.close()
         except:
             print("Unable to close database connection.")
 
@@ -78,16 +77,20 @@ class DBClient():
 
 
     def insert_batch(self, batch):
-        self.cur.executemany(
-            sql.SQL(
-                """
-                INSERT INTO {} (chunk_id, source_url, language, updated_on, category, description, title, html, content, related_links)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                ON CONFLICT (chunk_id) DO NOTHING;
-                """
-            ).format(self.table_identifier),
-            [astuple(chunk) for chunk in batch],
-            returning=True
-        )
-
-        return self.cur.rowcount
+        try:
+            self.cur.executemany(
+                sql.SQL(
+                    """
+                    INSERT INTO {} (chunk_id, source_url, language, updated_on, category, description, title, html, content, related_links)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (chunk_id) DO NOTHING;
+                    """
+                ).format(self.table_identifier),
+                [astuple(chunk) for chunk in batch],
+                returning=True
+            )
+            self.con.commit()
+            return self.cur.rowcount
+        except Exception:
+            self.con.rollback()
+            raise
