@@ -216,7 +216,6 @@ class PagesSpider(scrapy.Spider):
 
     def closed(self, reason):
         if not self.batch.is_empty():
-            print(f"FINAL UPLOAD WITH {self.batch.length()} ITEMS")
             self.batch.on_full_callback(self.batch.chunks)
             self.batch.clear_chunks()
 
