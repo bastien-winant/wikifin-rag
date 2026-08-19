@@ -1,9 +1,10 @@
 from dotenv import load_dotenv
 import os
-from psycopg import connect, sql
+from psycopg import connect, sql, rows
 from dataclasses import astuple
 from wikifin_rag.embedder import Embedder
 from wikifin_rag.config import PROJECT_ROOT
+from wikifin_rag.utils import vec_to_str
 
 
 class PostgresClient():
@@ -29,7 +30,8 @@ class PostgresClient():
                 dbname=self.db_name,
                 user=self.db_user,
                 password=self.db_password,
-                autocommit=autocommit
+                autocommit=autocommit,
+                row_factory=rows.dict_row
             )
 
             self.cur = self.con.cursor()
@@ -97,7 +99,7 @@ class PostgresClient():
                     ON CONFLICT (chunk_id) DO NOTHING;
                     """
                 ).format(self.table_identifier),
-                [astuple(batch[i]) + (f"[{",".join(str(x) for x in embeddings[i])}]",) for i in range(len(batch))],
+                [astuple(batch[i]) + (vec_to_str(embeddings[i]),) for i in range(len(batch))],
                 returning=True
             )
             self.con.commit()
@@ -105,6 +107,27 @@ class PostgresClient():
         except Exception:
             self.con.rollback()
             raise
+
+
+    def vector_search(self, query, num_results=5):
+        try:
+            query_vector = self.embedder.encode(query)
+            query_str = vec_to_str(query_vector)
+
+            return self.cur.execute(
+                sql.SQL(
+                    """
+                    SELECT category, title, content, source_url
+                    FROM {}
+                    ORDER BY embedding <=> %s::vector
+                    LIMIT %s
+                    """
+                ).format(self.table_identifier),
+                (query_str, num_results)
+            ).fetchall()
+        except Exception as e:
+            print(f"Unable to fetch results: {e}")
+
 
     def copy_table_to_csv(self, filename, dest="data"):
         dest = PROJECT_ROOT / dest
