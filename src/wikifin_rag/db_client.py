@@ -3,6 +3,7 @@ import os
 from psycopg import connect, sql
 from dataclasses import astuple
 from wikifin_rag.embedder import Embedder
+from wikifin_rag.config import PROJECT_ROOT
 
 
 class PostgresClient():
@@ -105,9 +106,12 @@ class PostgresClient():
             self.con.rollback()
             raise
 
-    def copy_to_csv(self):
+    def copy_table_to_csv(self, filename, dest="data"):
+        dest = PROJECT_ROOT / dest
+        dest.mkdir(parents=True, exist_ok=True)
+
         try:
-            with open("output.csv", "wb") as f:
+            with open(dest / filename, "wb") as f:
                 with self.cur.copy(
                     sql.SQL("COPY (SELECT * FROM {}) TO STDOUT WITH CSV HEADER").format(self.table_identifier)
                 ) as copy:
