@@ -104,3 +104,14 @@ class PostgresClient():
         except Exception:
             self.con.rollback()
             raise
+
+    def copy_to_csv(self):
+        try:
+            with open("output.csv", "wb") as f:
+                with self.cur.copy(
+                    sql.SQL("COPY (SELECT * FROM {}) TO STDOUT WITH CSV HEADER").format(self.table_identifier)
+                ) as copy:
+                    while data := copy.read():
+                        f.write(data)
+        except Exception as e:
+            print("Error copying the data to the file: {}".format(e))
