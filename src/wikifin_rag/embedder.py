@@ -5,7 +5,7 @@ from wikifin_rag.config import PROJECT_ROOT
 
 
 class Embedder:
-    def __init__(self, path="models/Xenova/all-MiniLM-L6-v2"):
+    def __init__(self, path="models/Xenova/multilingual-e5-base"):
         path = PROJECT_ROOT / path
         self.tokenizer = Tokenizer.from_file(str(path / "tokenizer.json"))
         self.session = ort.InferenceSession(

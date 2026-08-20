@@ -45,4 +45,4 @@ def download(repo, dest="models"):
             print(f"  exists {dst}")
 
 if __name__ == "__main__":
-    download("Xenova/all-MiniLM-L6-v2")
+    download("Xenova/multilingual-e5-base")

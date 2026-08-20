@@ -68,7 +68,7 @@ class PostgresClient():
                     title TEXT,
                     html TEXT,
                     content TEXT,
-                    embedding vector(384),
+                    embedding vector(768),
                     related_links TEXT[],
                     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 );
