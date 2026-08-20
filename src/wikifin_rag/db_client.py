@@ -5,6 +5,7 @@ from dataclasses import astuple
 from wikifin_rag.embedder import Embedder
 from wikifin_rag.config import PROJECT_ROOT
 from wikifin_rag.utils import vec_to_str
+import logging
 
 
 class PostgresClient():
@@ -21,6 +22,8 @@ class PostgresClient():
 
         self.embedder = embedder
 
+        self.logger = logging.getLogger(__name__)
+
 
     def open_connection(self, autocommit=True):
         try:
@@ -35,55 +38,61 @@ class PostgresClient():
             )
 
             self.cur = self.con.cursor()
-        except:
-            print("Unable to open the database connection.")
+        except Exception as e:
+            self.logger.error(f"Unable to open the database connection: {e}")
 
 
     def close_connection(self):
         try:
             self.cur.close()
             self.con.close()
-        except:
-            print("Unable to close the database connection.")
+        except Exception as e:
+            self.logger.error(f"Unable to close the database connection: {e}")
 
 
     def create_table(self, drop=False):
-        if drop:
+        try:
+            if drop:
+                self.cur.execute(
+                    sql.SQL("DROP TABLE IF EXISTS {};").format(self.table_identifier)
+                )
+
+            self.cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+            
             self.cur.execute(
-                sql.SQL("DROP TABLE IF EXISTS {};").format(self.table_identifier)
+                sql.SQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS {} (
+                        chunk_id TEXT PRIMARY KEY,
+                        source_url TEXT NOT NULL,
+                        language TEXT,
+                        updated_on DATE,
+                        category TEXT,
+                        description TEXT,
+                        title TEXT,
+                        html TEXT,
+                        content TEXT,
+                        embedding vector(768),
+                        related_links TEXT[],
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    );
+                    """
+                ).format(self.table_identifier)
             )
 
-        self.cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
-        
-        self.cur.execute(
-            sql.SQL(
-                """
-                CREATE TABLE IF NOT EXISTS {} (
-                    chunk_id TEXT PRIMARY KEY,
-                    source_url TEXT NOT NULL,
-                    language TEXT,
-                    updated_on DATE,
-                    category TEXT,
-                    description TEXT,
-                    title TEXT,
-                    html TEXT,
-                    content TEXT,
-                    embedding vector(768),
-                    related_links TEXT[],
-                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                );
-                """
-            ).format(self.table_identifier)
-        )
+            self.cur.execute(
+                sql.SQL(
+                    """
+                    CREATE INDEX ON {}
+                    USING hnsw (embedding vector_cosine_ops)
+                    """
+                ).format(self.table_identifier)
+            )
 
-        self.cur.execute(
-            sql.SQL(
-                """
-                CREATE INDEX ON {}
-                USING hnsw (embedding vector_cosine_ops)
-                """
-            ).format(self.table_identifier)
-        )
+            self.logger.info("The database table has been created.")
+
+        except Exception as e:
+            self.logger.error(f"The table could not be created: {e}")
 
 
     def insert_batch(self, batch):
@@ -103,9 +112,11 @@ class PostgresClient():
                 returning=True
             )
             self.con.commit()
+            self.logger.info(f"Upserted the batch ({len(batch)} records.)")
             return self.cur.rowcount
-        except Exception:
+        except Exception as e:
             self.con.rollback()
+            self.logger.error(f"Error writing batch data: {e}")
             raise
 
 
@@ -126,7 +137,7 @@ class PostgresClient():
                 (query_str, num_results)
             ).fetchall()
         except Exception as e:
-            print(f"Unable to fetch results: {e}")
+            self.logger.error(f"Unable to fetch results: {e}")
 
 
     def copy_table_to_csv(self, filename, dest="data"):
@@ -140,5 +151,6 @@ class PostgresClient():
                 ) as copy:
                     while data := copy.read():
                         f.write(data)
+            self.logger.info(f"Table data copied to {dest / filename}")
         except Exception as e:
-            print("Error copying the data to the file: {}".format(e))
+            self.logger.error("Error copying the data to the file: {}".format(e))
