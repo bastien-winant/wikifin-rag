@@ -179,19 +179,20 @@ class PagesSpider(scrapy.Spider):
 
 
                     # add the document to the batch
-                    document_id = generate_id(page_id + "\n".join(content_text))
-                    self.batch.add_document({
-                        "id": document_id,
-                        "source_url": response.url,
-                        "language": language,
-                        "updated_on": date,
-                        "title": title,
-                        "description": description,
-                        "section": section,
-                        "html": "\n".join(content_html),
-                        "content": "\n".join(content_text),
-                        "related_links": related_links
-                    })
+                    if content_html:
+                        document_id = generate_id(page_id + "\n".join(content_text))
+                        self.batch.add_document({
+                            "id": document_id,
+                            "source_url": response.url,
+                            "language": language,
+                            "updated_on": date,
+                            "title": title,
+                            "description": description,
+                            "section": section,
+                            "html": "\n".join(content_html),
+                            "content": "\n".join(content_text),
+                            "related_links": related_links
+                        })
 
             # Recursively follow links
             links = node.css("a")
