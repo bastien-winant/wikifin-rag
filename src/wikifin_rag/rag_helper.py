@@ -4,9 +4,9 @@ based on the provided context.
 
 Use the context to find relevant information and provide accurate
 answers. If the answer is not found in the context,
-respond with "I don't know."
+respond with "I was unable to find enough relevant information to provide an answer."
 
-If you do provide an answer, always include the source URLs as a reference.
+When using information from the context in your answer, always include all the related source URLs as reference.
 '''
 
 PROMPT_TEMPLATE = '''
@@ -36,7 +36,7 @@ class RAGBase:
         self.model = model
 
 
-    def search(self, query, num_results=5):
+    def search(self, query, num_results=10):
         self.db_client.open_connection()
         results = self.db_client.vector_search(query, num_results)
         self.db_client.close_connection()
