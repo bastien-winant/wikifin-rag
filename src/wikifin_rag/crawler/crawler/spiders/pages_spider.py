@@ -124,15 +124,19 @@ class PagesSpider(scrapy.Spider):
 
                 elif has_class(paragraph, "paragraph--type--pt-text"):
                     section = title
+
+                    # containers to accumulate document content
                     content_html = []
                     content_text = []
 
+                    # extract all direct children of the .text-content container
                     content_elements = paragraph.css(".text-content > *")
 
-                    # save all the paragraph text as documents
+                    # iterate over all html elements
                     for element in content_elements:
-                        # if there is an h2 title, upload and create a new document
+                        # if the element is an H2 title
                         if element.root.tag == "h2":
+                            # save the current document content
                             if content_html:
                                 # add the document to the batch
                                 document_id = generate_id(page_id + "\n".join(content_text))
@@ -149,12 +153,14 @@ class PagesSpider(scrapy.Spider):
                                     "related_links": related_links
                                 })
 
-                            # reinitialize the running document containers
+                            # set the h2 text as the section title
                             section = element.css("::text").get()
+
+                            # reinitialize the running document containers
                             content_html = []
                             content_text = []
 
-                        # accumulate non-title text into current document
+                        # accumulate non-title content into current document
                         else:
                             # get the next html as a string
                             html_str = element.get()
@@ -162,7 +168,7 @@ class PagesSpider(scrapy.Spider):
                             # if the element is a list, store strings as CSVs
                             if element.root.tag in ["ul", "ol"]:
                                 text_str = extract_content(html_str, sep=", ")
-                            # if the element is a header, prepend a pound sign
+                            # if the element is a header, capitalize and prepend a pound sign
                             elif element.root.tag in ["h3", "h4", "h5", "h6"]:
                                 text_str = f"\n\n# {extract_content(html_str).upper()}\n"
                             else:

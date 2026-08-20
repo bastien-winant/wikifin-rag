@@ -157,7 +157,7 @@ class PostgresClient():
                         document.content,
                         document.related_links
                     )
-                    for document in batch
+                    for document in batch if document.content
                 ],
                 returning=True
             )
@@ -186,7 +186,7 @@ class PostgresClient():
                         chunk["content"],
                         vec_to_str(embeddings[i]),
                     )
-                    for i, chunk in enumerate(chunked_batch)
+                    for i, chunk in enumerate(chunked_batch) if chunk["content"]
                 ],
                 returning=True
             )
