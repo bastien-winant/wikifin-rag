@@ -46,11 +46,11 @@ class RAGBase:
     def build_context(self, search_results):
         lines = []
 
-        for doc in search_results:
-            lines.append(f"TOPIC: {doc['category']}")
-            lines.append(f"SECTION: {doc['title']}")
-            lines.append(f"CONTENT: {doc['content']}")
-            lines.append(f"SOURCE: {doc['source_url']}")
+        for chunk in search_results:
+            lines.append(f"DOCUMENT: {chunk['title']}")
+            lines.append(f"SECTION: {chunk['section']}")
+            lines.append(f"CONTENT: {chunk['content']}")
+            lines.append(f"SOURCE: {chunk['source_url']}")
             lines.append('')
 
         return '\n'.join(lines).strip()

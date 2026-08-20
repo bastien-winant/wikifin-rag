@@ -9,10 +9,11 @@ import logging
 
 
 class PostgresClient():
-    def __init__(self, table_name="document_chunks", embedder=Embedder()):
+    def __init__(self, embedder=Embedder()):
         load_dotenv(override=True)
 
-        self.table_identifier = sql.Identifier(table_name)
+        self.documents_table_identifier = sql.Identifier("documents")
+        self.chunks_table_identifier = sql.Identifier("chunks")
 
         self.db_host = "localhost"
         self.db_port = 5432
@@ -50,34 +51,51 @@ class PostgresClient():
             self.logger.error(f"Unable to close the database connection: {e}")
 
 
-    def create_table(self, drop=False):
+    def create_tables(self, drop=False):
         try:
             if drop:
                 self.cur.execute(
-                    sql.SQL("DROP TABLE IF EXISTS {};").format(self.table_identifier)
+                    sql.SQL("DROP TABLE IF EXISTS {};").format(self.chunks_table_identifier)
+                )
+                self.cur.execute(
+                    sql.SQL("DROP TABLE IF EXISTS {};").format(self.documents_table_identifier)
                 )
 
             self.cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+
+            self.cur.execute(
+                sql.SQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS {} (
+                        id TEXT PRIMARY KEY,
+                        source_url TEXT NOT NULL,
+                        language TEXT,
+                        updated_on DATE,
+                        title TEXT,
+                        description TEXT,
+                        section TEXT,
+                        html TEXT,
+                        content TEXT,
+                        related_links TEXT[],
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    );
+                    """
+                ).format(self.documents_table_identifier)
+            )
             
             self.cur.execute(
                 sql.SQL(
                     """
                     CREATE TABLE IF NOT EXISTS {} (
-                        chunk_id TEXT PRIMARY KEY,
-                        source_url TEXT NOT NULL,
-                        language TEXT,
-                        updated_on DATE,
-                        category TEXT,
-                        description TEXT,
-                        title TEXT,
-                        html TEXT,
+                        document_id TEXT REFERENCES {} (id),
+                        chunk_id TEXT NOT NULL,
                         content TEXT,
                         embedding vector(768),
-                        related_links TEXT[],
-                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                        PRIMARY KEY (document_id, chunk_id)
                     );
                     """
-                ).format(self.table_identifier)
+                ).format(self.chunks_table_identifier, self.documents_table_identifier)
             )
 
             self.cur.execute(
@@ -86,67 +104,93 @@ class PostgresClient():
                     CREATE INDEX ON {}
                     USING hnsw (embedding vector_cosine_ops)
                     """
-                ).format(self.table_identifier)
+                ).format(self.chunks_table_identifier)
             )
 
-            self.logger.info("The database table has been created.")
+            self.logger.info("The database tables have been created.")
 
         except Exception as e:
-            self.logger.error(f"The table could not be created: {e}")
+            self.logger.error(f"The tables could not be created: {e}")
 
 
     def chunk_batch(self, batch, chunk_size, overlap):
         chunked_batch = []
 
         for document in batch:
+            # split the document content into chunks
             chunks = text_to_chunks(document.content, chunk_size, overlap)
 
             for chunk_id, chunk_text in chunks.items():
-                document_chunk = asdict(document) # create a deep copy of the full document
-                document_chunk["chunk_id"] = f"{document.id}_{chunk_id}" # create a unique id for the document
-                document_chunk["content"] = chunk_text # assign the shorter chunk text to the content
-
-                chunked_batch.append(document_chunk)
+                chunked_batch.append({
+                    "document_id": document.id, # keep the document ID for reference
+                    "chunk_id": chunk_id, # chunk sequence ID
+                    "title": document.title,
+                    "section": document.section,
+                    "content": chunk_text
+                })
 
         return chunked_batch
 
 
 
     def insert_batch(self, batch):
-        chunked_batch = self.chunk_batch(batch, 300, 50) # list of dictionaries
-        batch_texts = [f"{chunk["title"]}\n{chunk['content']}" for chunk in chunked_batch]
-        embeddings = self.embedder.encode_batch(batch_texts)
-
         try:
+            # UPLOAD DOCUMENTS
             self.cur.executemany(
                 sql.SQL(
                     """
-                    INSERT INTO {} (chunk_id, source_url, language, updated_on, category, description, title, html, content, related_links, embedding)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (chunk_id) DO NOTHING;
+                    INSERT INTO {} (id, source_url, language, updated_on, title, description, section, html, content, related_links)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (id) DO NOTHING;
                     """
-                ).format(self.table_identifier),
+                ).format(self.documents_table_identifier),
                 [
                     (
+                        document.id,
+                        document.source_url,
+                        document.language,
+                        document.updated_on,
+                        document.title,
+                        document.description,
+                        document.section,
+                        document.html,
+                        document.content,
+                        document.related_links
+                    )
+                    for document in batch
+                ],
+                returning=True
+            )
+            self.logger.info(f"Upserted {len(batch)} document records.)")
+
+
+            # SPLIT DOCUMENTS INTO CHUNKS AND GENERATE EMBEDDINGS
+            chunked_batch = self.chunk_batch(batch, 300, 50) # list of dictionaries
+
+            batch_texts = [f"Document: {chunk["title"]}\nSection: {chunk["section"]}\n\n{chunk['content']}" for chunk in chunked_batch]
+            embeddings = self.embedder.encode_batch(batch_texts)
+
+            # UPLOAD CHUNKS
+            self.cur.executemany(
+                sql.SQL(
+                    """
+                    INSERT INTO {} (document_id, chunk_id, content, embedding)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (document_id, chunk_id) DO NOTHING;
+                    """
+                ).format(self.chunks_table_identifier),
+                [
+                    (
+                        chunk["document_id"],
                         chunk["chunk_id"],
-                        chunk["source_url"],
-                        chunk["language"],
-                        chunk["updated_on"],
-                        chunk["category"],
-                        chunk["description"],
-                        chunk["title"],
-                        chunk["html"],
                         chunk["content"],
-                        chunk["related_links"],
                         vec_to_str(embeddings[i]),
                     )
                     for i, chunk in enumerate(chunked_batch)
                 ],
                 returning=True
             )
-            self.con.commit()
-            self.logger.info(f"Upserted the batch ({len(batch)} records.)")
-            return self.cur.rowcount
+            self.logger.info(f"Upserted {len(chunked_batch)} chunk records.)")
         except Exception as e:
             self.con.rollback()
             self.logger.error(f"Error writing batch data: {e}")
@@ -161,29 +205,39 @@ class PostgresClient():
             return self.cur.execute(
                 sql.SQL(
                     """
-                    SELECT category, title, content, source_url
-                    FROM {}
-                    ORDER BY embedding <=> %s::vector
+                    SELECT d.title, d.section, c.content, d.source_url
+                    FROM {} c
+                    JOIN {} d
+                    ON c.document_id = d.id
+                    ORDER BY c.embedding <=> %s::vector
                     LIMIT %s
                     """
-                ).format(self.table_identifier),
+                ).format(self.chunks_table_identifier, self.documents_table_identifier),
                 (query_str, num_results)
             ).fetchall()
         except Exception as e:
             self.logger.error(f"Unable to fetch results: {e}")
 
 
-    def copy_table_to_csv(self, filename, dest="data"):
+    def copy_table_to_csv(self, dest="data"):
         dest = PROJECT_ROOT / dest
         dest.mkdir(parents=True, exist_ok=True)
 
         try:
-            with open(dest / filename, "wb") as f:
+            with open(dest / "chunks.csv", "wb") as f:
                 with self.cur.copy(
-                    sql.SQL("COPY (SELECT * FROM {}) TO STDOUT WITH CSV HEADER").format(self.table_identifier)
+                    sql.SQL("COPY (SELECT * FROM {}) TO STDOUT WITH CSV HEADER").format(self.chunks_table_identifier)
                 ) as copy:
                     while data := copy.read():
                         f.write(data)
-            self.logger.info(f"Table data copied to {dest / filename}")
+            self.logger.info(f"Table data copied to {dest}/chunks.csv")
+
+            with open(dest / "documents.csv", "wb") as f:
+                with self.cur.copy(
+                    sql.SQL("COPY (SELECT * FROM {}) TO STDOUT WITH CSV HEADER").format(self.documents_table_identifier)
+                ) as copy:
+                    while data := copy.read():
+                        f.write(data)
+            self.logger.info(f"Table data copied to {dest}/documents.csv")
         except Exception as e:
             self.logger.error("Error copying the data to the file: {}".format(e))

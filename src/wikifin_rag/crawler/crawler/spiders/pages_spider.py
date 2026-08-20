@@ -39,9 +39,9 @@ class PagesSpider(scrapy.Spider):
             clear_on_full=True
         )
 
-        drop_table = getattr(self, "drop_table", "False").capitalize() == "True"
+        drop_tables = getattr(self, "drop_tables", "False").capitalize() == "True"
         self.db_client.open_connection()
-        self.db_client.create_table(drop=drop_table)
+        self.db_client.create_tables(drop=drop_tables)
 
 
     def parse(self, response):
@@ -69,7 +69,7 @@ class PagesSpider(scrapy.Spider):
             html = response.text
             metadata = extract_metadata(html).as_dict()
 
-            category = metadata.get('title')
+            title = metadata.get('title')
             description = metadata.get('description')
 
             date_str = metadata.get('date')
@@ -103,7 +103,7 @@ class PagesSpider(scrapy.Spider):
                     # save each question/pair as a document
                     for faq in faqs:
                         # retrieve the text content
-                        title = faq.css(".faq__title::text").get().strip()
+                        section = faq.css(".faq__title::text").get().strip()
                         content_html = faq.css(".faq__content").get()
                         content_text = extract_content(content_html)
 
@@ -114,16 +114,16 @@ class PagesSpider(scrapy.Spider):
                             "source_url": response.url,
                             "language": language,
                             "updated_on": date,
-                            "category": category,
-                            "description": description,
                             "title": title,
+                            "description": description,
+                            "section": section,
                             "html": content_html,
                             "content": content_text,
                             "related_links": related_links
                         })
 
                 elif has_class(paragraph, "paragraph--type--pt-text"):
-                    title = category
+                    section = title
                     content_html = []
                     content_text = []
 
@@ -141,16 +141,16 @@ class PagesSpider(scrapy.Spider):
                                     "source_url": response.url,
                                     "language": language,
                                     "updated_on": date,
-                                    "category": category,
-                                    "description": description,
                                     "title": title,
+                                    "description": description,
+                                    "section": section,
                                     "html": "\n".join(content_html),
                                     "content": "\n".join(content_text),
                                     "related_links": related_links
                                 })
 
                             # reinitialize the running document containers
-                            title = element.css("::text").get()
+                            section = element.css("::text").get()
                             content_html = []
                             content_text = []
 
@@ -179,9 +179,9 @@ class PagesSpider(scrapy.Spider):
                         "source_url": response.url,
                         "language": language,
                         "updated_on": date,
-                        "category": category,
-                        "description": description,
                         "title": title,
+                        "description": description,
+                        "section": section,
                         "html": "\n".join(content_html),
                         "content": "\n".join(content_text),
                         "related_links": related_links
