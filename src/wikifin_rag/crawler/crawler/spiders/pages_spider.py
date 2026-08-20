@@ -26,15 +26,14 @@ class PagesSpider(scrapy.Spider):
     start_urls = ["https://www.wikifin.be/page/sitemap.xml"]
 
 
-    def __init__(self, batch_size=10, chunk_size=2000, **kwargs):
+    def __init__(self, batch_size=100, **kwargs):
         super().__init__(**kwargs)
 
         self.batch_size = int(batch_size)
-        self.chunk_size = int(chunk_size)
 
         self.db_client = PostgresClient()
         self.batch = Batch(
-            chunks=[],
+            documents=[],
             size=self.batch_size,
             on_full_callback=self.db_client.insert_batch,
             clear_on_full=True
@@ -62,7 +61,7 @@ class PagesSpider(scrapy.Spider):
 
     def parse_content_page(self, response):
         try:
-            document_id = generate_id(response.url)
+            page_id = generate_id(response.url)
 
             language = "fr" if "/fr/" in response.url else "nl"
 
@@ -101,17 +100,17 @@ class PagesSpider(scrapy.Spider):
                 elif has_class(paragraph, "paragraph--type--pt-faq-list"):
                     faqs = paragraph.css(".faq")
 
-                    # save each question/pair as a chunk
+                    # save each question/pair as a document
                     for faq in faqs:
                         # retrieve the text content
                         title = faq.css(".faq__title::text").get().strip()
                         content_html = faq.css(".faq__content").get()
                         content_text = extract_content(content_html)
 
-                        # add the chunk to the batch
-                        chunk_id = generate_id(document_id + content_text)
-                        self.batch.add_chunk({
-                            "chunk_id": chunk_id,
+                        # add the document to the batch
+                        document_id = generate_id(page_id + content_text)
+                        self.batch.add_document({
+                            "id": document_id,
                             "source_url": response.url,
                             "language": language,
                             "updated_on": date,
@@ -130,15 +129,15 @@ class PagesSpider(scrapy.Spider):
 
                     content_elements = paragraph.css(".text-content > *")
 
-                    # save all the paragraph text as chunks
+                    # save all the paragraph text as documents
                     for element in content_elements:
-                        # if there is an h2 title, upload and create a new chunk
+                        # if there is an h2 title, upload and create a new document
                         if element.root.tag == "h2":
                             if content_html:
-                                # add the chunk to the batch
-                                chunk_id = generate_id(document_id + "\n".join(content_text))
-                                self.batch.add_chunk({
-                                    "chunk_id": chunk_id,
+                                # add the document to the batch
+                                document_id = generate_id(page_id + "\n".join(content_text))
+                                self.batch.add_document({
+                                    "id": document_id,
                                     "source_url": response.url,
                                     "language": language,
                                     "updated_on": date,
@@ -150,12 +149,12 @@ class PagesSpider(scrapy.Spider):
                                     "related_links": related_links
                                 })
 
-                            # reinitialize the running chunk containers
+                            # reinitialize the running document containers
                             title = element.css("::text").get()
                             content_html = []
                             content_text = []
 
-                        # accumulate non-title text into current chunk
+                        # accumulate non-title text into current document
                         else:
                             # get the next html as a string
                             html_str = element.get()
@@ -172,30 +171,11 @@ class PagesSpider(scrapy.Spider):
                             content_html.append(html_str)
                             content_text.append(text_str)
 
-                            # length-based chunking
-                            if len(" ".join(content_text)) >= self.chunk_size:
-                                chunk_id = generate_id(document_id + "\n".join(content_text))
-                                self.batch.add_chunk({
-                                    "chunk_id": chunk_id,
-                                    "source_url": response.url,
-                                    "language": language,
-                                    "updated_on": date,
-                                    "category": category,
-                                    "description": description,
-                                    "title": title,
-                                    "html": "\n".join(content_html),
-                                    "content": "\n".join(content_text),
-                                    "related_links": related_links
-                                })
 
-                                content_html = [html_str]
-                                content_text = [text_str]
-
-
-                    # add the chunk to the batch
-                    chunk_id = generate_id(document_id + "\n".join(content_text))
-                    self.batch.add_chunk({
-                        "chunk_id": chunk_id,
+                    # add the document to the batch
+                    document_id = generate_id(page_id + "\n".join(content_text))
+                    self.batch.add_document({
+                        "id": document_id,
                         "source_url": response.url,
                         "language": language,
                         "updated_on": date,
@@ -219,8 +199,8 @@ class PagesSpider(scrapy.Spider):
 
     def closed(self, reason):
         if not self.batch.is_empty():
-            self.batch.on_full_callback(self.batch.chunks)
-            self.batch.clear_chunks()
+            self.batch.on_full_callback(self.batch.documents)
+            self.batch.clear_documents()
 
         self.db_client.close_connection()
         self.logger.info(f"Spider closed with reason: {reason}")

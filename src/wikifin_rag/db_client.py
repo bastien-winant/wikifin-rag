@@ -1,10 +1,10 @@
 from dotenv import load_dotenv
 import os
 from psycopg import connect, sql, rows
-from dataclasses import astuple
+from dataclasses import asdict
 from wikifin_rag.embedder import Embedder
 from wikifin_rag.config import PROJECT_ROOT
-from wikifin_rag.utils import vec_to_str
+from wikifin_rag.utils import vec_to_str, text_to_chunks
 import logging
 
 
@@ -95,8 +95,26 @@ class PostgresClient():
             self.logger.error(f"The table could not be created: {e}")
 
 
+    def chunk_batch(self, batch, chunk_size, overlap):
+        chunked_batch = []
+
+        for document in batch:
+            chunks = text_to_chunks(document.content, chunk_size, overlap)
+
+            for chunk_id, chunk_text in chunks.items():
+                document_chunk = asdict(document) # create a deep copy of the full document
+                document_chunk["chunk_id"] = f"{document.id}_{chunk_id}" # create a unique id for the document
+                document_chunk["content"] = chunk_text # assign the shorter chunk text to the content
+
+                chunked_batch.append(document_chunk)
+
+        return chunked_batch
+
+
+
     def insert_batch(self, batch):
-        batch_texts = [f"{chunk.title}\n{chunk.content}" for chunk in batch]
+        chunked_batch = self.chunk_batch(batch, 300, 50) # list of dictionaries
+        batch_texts = [f"{chunk["title"]}\n{chunk['content']}" for chunk in chunked_batch]
         embeddings = self.embedder.encode_batch(batch_texts)
 
         try:
@@ -108,7 +126,22 @@ class PostgresClient():
                     ON CONFLICT (chunk_id) DO NOTHING;
                     """
                 ).format(self.table_identifier),
-                [astuple(batch[i]) + (vec_to_str(embeddings[i]),) for i in range(len(batch))],
+                [
+                    (
+                        chunk["chunk_id"],
+                        chunk["source_url"],
+                        chunk["language"],
+                        chunk["updated_on"],
+                        chunk["category"],
+                        chunk["description"],
+                        chunk["title"],
+                        chunk["html"],
+                        chunk["content"],
+                        chunk["related_links"],
+                        vec_to_str(embeddings[i]),
+                    )
+                    for i, chunk in enumerate(chunked_batch)
+                ],
                 returning=True
             )
             self.con.commit()

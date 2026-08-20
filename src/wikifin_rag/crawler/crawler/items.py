@@ -3,8 +3,8 @@ from datetime import date as Date
 
 
 @dataclass
-class Chunk:
-    chunk_id: str
+class Document:
+    id: str
     source_url: str
     language: str | None = None
     updated_on: Date | None = None
@@ -18,29 +18,29 @@ class Chunk:
 
 @dataclass
 class Batch:
-    chunks: list[Chunk]
+    documents: list[Document]
     size: int
     on_full_callback: function | None = None
     clear_on_full: bool | None = False
 
-    def clear_chunks(self):
-        self.chunks.clear()
+    def clear_documents(self):
+        self.documents.clear()
 
-    def add_chunk(self, data):
-        self.chunks.append(Chunk(**data))
+    def add_document(self, data):
+        self.documents.append(Document(**data))
 
         if self.is_full():
             if self.on_full_callback:
-                self.on_full_callback(self.chunks)
+                self.on_full_callback(self.documents)
 
             if self.clear_on_full:
-                self.clear_chunks()
+                self.clear_documents()
 
     def length(self):
-        return len(self.chunks)
+        return len(self.documents)
 
     def is_full(self):
-        return len(self.chunks) >= self.size
+        return len(self.documents) >= self.size
 
     def is_empty(self):
-        return len(self.chunks) == 0
+        return len(self.documents) == 0
