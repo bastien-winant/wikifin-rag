@@ -161,7 +161,7 @@ class PostgresClient():
                 ],
                 returning=True
             )
-            self.logger.info(f"Upserted {len(batch)} document records.)")
+            self.logger.info(f"Upserted {len(batch)} document records.")
 
 
             # SPLIT DOCUMENTS INTO CHUNKS AND GENERATE EMBEDDINGS
@@ -190,7 +190,7 @@ class PostgresClient():
                 ],
                 returning=True
             )
-            self.logger.info(f"Upserted {len(chunked_batch)} chunk records.)")
+            self.logger.info(f"Upserted {len(chunked_batch)} chunk records.")
         except Exception as e:
             self.con.rollback()
             self.logger.error(f"Error writing batch data: {e}")
