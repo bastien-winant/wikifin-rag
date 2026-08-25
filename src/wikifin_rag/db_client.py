@@ -132,7 +132,6 @@ class PostgresClient():
         return chunked_batch
 
 
-
     def insert_batch(self, batch):
         try:
             # UPLOAD DOCUMENTS
@@ -209,11 +208,12 @@ class PostgresClient():
                     FROM {} c
                     JOIN {} d
                     ON c.document_id = d.id
+                    WHERE d.language = %s
                     ORDER BY c.embedding <=> %s::vector
                     LIMIT %s
                     """
                 ).format(self.chunks_table_identifier, self.documents_table_identifier),
-                (query_str, num_results)
+                ("nl", query_str, num_results)
             ).fetchall()
         except Exception as e:
             self.logger.error(f"Unable to fetch results: {e}")
