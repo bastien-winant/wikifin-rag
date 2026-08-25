@@ -204,7 +204,7 @@ class PostgresClient():
             return self.cur.execute(
                 sql.SQL(
                     """
-                    SELECT d.title, d.section, c.content, d.source_url
+                    SELECT c.document_id || '_' || c.chunk_id AS id, d.title, d.section, c.content, d.source_url
                     FROM {} c
                     JOIN {} d
                     ON c.document_id = d.id
