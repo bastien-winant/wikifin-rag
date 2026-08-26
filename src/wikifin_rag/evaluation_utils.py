@@ -1,7 +1,5 @@
 import time
-
 from tqdm.auto import tqdm
-from wikifin_rag.rag_helper import RAGBase
 
 
 def calc_price(usage):

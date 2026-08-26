@@ -216,7 +216,13 @@ class PostgresClient():
                     plainto_tsquery(%s) query
                     WHERE query @@ to_tsvector(coalesce(c.content, ''))
                     AND d.language = %s
-                    ORDER BY ts_rank(%s::real[], to_tsvector(coalesce(c.content, '')), query, %s) DESC
+                    ORDER BY ts_rank(
+                        %s::real[],
+                        setweight(to_tsvector(coalesce(d.title, '')), 'A') ||
+                            setweight(to_tsvector(coalesce(d.description, '')), 'B') ||
+                            setweight(to_tsvector(coalesce(d.section, '')), 'C') ||
+                            setweight(to_tsvector(coalesce(c.content, '')), 'D'),
+                        query, %s) DESC
                     LIMIT %s
                     """
                 ).format(self.chunks_table_identifier, self.documents_table_identifier),
