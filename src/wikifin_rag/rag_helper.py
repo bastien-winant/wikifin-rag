@@ -17,6 +17,7 @@ CONTEXT:
 '''.strip()
 
 from wikifin_rag.db_client import PostgresClient
+from wikifin_rag.evaluation_utils import calc_total_price
 
 
 class RAGBase:
@@ -34,6 +35,15 @@ class RAGBase:
         self.instructions = instructions
         self.prompt_template = prompt_template
         self.model = model
+
+        self.usages = []
+        self.last_usage = None
+
+
+    def reset_usage(self):
+        self.usages = []
+        self.last_usage = None
+
 
     def rrf(self, search_results, k=1, num_results=10):
         scores = {}
@@ -81,14 +91,17 @@ class RAGBase:
 
     def llm(self, prompt):
         input_messages = [
-            {'role': 'developer', 'content': self.instructions},
-            {'role': 'user', 'content': prompt}
+            {"role": "developer", "content": self.instructions},
+            {"role": "user", "content": prompt}
         ]
 
         response = self.llm_client.responses.create(
             model=self.model,
             input=input_messages
         )
+
+        self.last_usage = response.usage
+        self.usages.append(response.usage)
 
         return response.output_text
 
@@ -98,3 +111,7 @@ class RAGBase:
         prompt = self.build_prompt(query, search_results)
         answer = self.llm(prompt)
         return answer
+    
+
+    def total_cost(self):
+        return calc_total_price(self.usages)
