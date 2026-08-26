@@ -35,12 +35,27 @@ class RAGBase:
         self.prompt_template = prompt_template
         self.model = model
 
+    def rrf(self, search_results, k=1, num_results=10):
+        scores = {}
+        doc_map = {}
+
+        for results in search_results:
+            for rank, doc in enumerate(results):
+                key = doc["id"]
+                if key not in scores:
+                    scores[key] = 0
+                    doc_map[key] = doc
+                scores[key] += 1 / (k + rank + 1)
+
+        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        return [doc_map[key] for key, _ in ranked[:num_results]]
+
 
     def search(self, query, num_results=10):
         self.db_client.open_connection()
-        results = self.db_client.vector_search(query, num_results)
-        self.db_client.close_connection()
-        return results
+        text_search_results = self.db_client.text_search(query, num_results)
+        vector_search_results = self.db_client.vector_search(query, num_results)
+        return self.rrf([text_search_results, vector_search_results], num_results=num_results)
 
 
     def build_context(self, search_results):
