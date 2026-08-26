@@ -196,8 +196,11 @@ class PostgresClient():
             raise
 
     
-    def text_search(self, query, num_results=5):
+    def text_search(self, query, weights=None, normalization=0, num_results=5):
         try:
+            if weights is None:
+                weights = [0.1, 0.2, 0.4, 1.0]
+
             return self.cur.execute(
                 sql.SQL(
                     """
@@ -213,11 +216,11 @@ class PostgresClient():
                     plainto_tsquery(%s) query
                     WHERE query @@ to_tsvector(coalesce(c.content, ''))
                     AND d.language = %s
-                    ORDER BY ts_rank(to_tsvector(coalesce(c.content, '')), query) DESC
+                    ORDER BY ts_rank(%s::real[], to_tsvector(coalesce(c.content, '')), query, %s) DESC
                     LIMIT %s
                     """
                 ).format(self.chunks_table_identifier, self.documents_table_identifier),
-                (query, "nl", num_results)
+                (query, "nl", weights, normalization, num_results)
             ).fetchall()
         except Exception as e:
             self.logger.error(f"Unable to fetch results: {e}")
