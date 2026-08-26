@@ -195,6 +195,33 @@ class PostgresClient():
             self.logger.error(f"Error writing batch data: {e}")
             raise
 
+    
+    def text_search(self, query, num_results=5):
+        try:
+            return self.cur.execute(
+                sql.SQL(
+                    """
+                    SELECT
+                        c.document_id || '_' || c.chunk_id AS id,
+                        d.title,
+                        d.section,
+                        c.content,
+                        d.source_url
+                    FROM {} c
+                    JOIN {} d
+                    ON c.document_id = d.id,
+                    plainto_tsquery(%s) query
+                    WHERE query @@ to_tsvector(coalesce(c.content, ''))
+                    AND d.language = %s
+                    ORDER BY ts_rank(to_tsvector(coalesce(c.content, '')), query) DESC
+                    LIMIT %s
+                    """
+                ).format(self.chunks_table_identifier, self.documents_table_identifier),
+                (query, "nl", num_results)
+            ).fetchall()
+        except Exception as e:
+            self.logger.error(f"Unable to fetch results: {e}")
+
 
     def vector_search(self, query, num_results=5):
         try:
@@ -204,7 +231,12 @@ class PostgresClient():
             return self.cur.execute(
                 sql.SQL(
                     """
-                    SELECT c.document_id || '_' || c.chunk_id AS id, d.title, d.section, c.content, d.source_url
+                    SELECT
+                        c.document_id || '_' || c.chunk_id AS id,
+                        d.title,
+                        d.section,
+                        c.content,
+                        d.source_url
                     FROM {} c
                     JOIN {} d
                     ON c.document_id = d.id
