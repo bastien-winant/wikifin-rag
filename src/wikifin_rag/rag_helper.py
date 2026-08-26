@@ -53,8 +53,9 @@ class RAGBase:
 
     def search(self, query, num_results=10):
         self.db_client.open_connection()
-        text_search_results = self.db_client.text_search(query, num_results)
-        vector_search_results = self.db_client.vector_search(query, num_results)
+        text_search_results = self.db_client.text_search(query=query, num_results=num_results)
+        vector_search_results = self.db_client.vector_search(query=query, num_results=num_results)
+        self.db_client.close_connection()
         return self.rrf([text_search_results, vector_search_results], num_results=num_results)
 
 
