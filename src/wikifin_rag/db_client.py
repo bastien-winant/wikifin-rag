@@ -199,34 +199,41 @@ class PostgresClient():
     def text_search(self, query, weights=None, normalization=0, num_results=5):
         try:
             if weights is None:
-                weights = [0.1, 0.2, 0.4, 1.0]
+                weights = {'A': 0.1, 'B': 0.2, 'C': 0.4, 'D': 1.0}
 
             return self.cur.execute(
                 sql.SQL(
                     """
+                    WITH textsearch_vector AS (
+                        SELECT
+                            c.document_id || '_' || c.chunk_id AS id,
+                            d.title,
+                            d.section,
+                            c.content,
+                            d.source_url,
+                            setweight(to_tsvector(coalesce(d.title, '')), 'A') ||
+                                setweight(to_tsvector(coalesce(d.description, '')), 'B') ||
+                                setweight(to_tsvector(coalesce(d.section, '')), 'C') ||
+                                setweight(to_tsvector(coalesce(c.content, '')), 'D') AS ts_vector
+                        FROM {} c
+                        JOIN {} d
+                        ON c.document_id = d.id
+                        WHERE d.language = %s
+                    ),
+                    query AS (SELECT plainto_tsquery(%s) AS ts_query)
                     SELECT
-                        c.document_id || '_' || c.chunk_id AS id,
-                        d.title,
-                        d.section,
-                        c.content,
-                        d.source_url
-                    FROM {} c
-                    JOIN {} d
-                    ON c.document_id = d.id,
-                    plainto_tsquery(%s) query
-                    WHERE query @@ to_tsvector(coalesce(c.content, ''))
-                    AND d.language = %s
-                    ORDER BY ts_rank(
-                        %s::real[],
-                        setweight(to_tsvector(coalesce(d.title, '')), 'A') ||
-                            setweight(to_tsvector(coalesce(d.description, '')), 'B') ||
-                            setweight(to_tsvector(coalesce(d.section, '')), 'C') ||
-                            setweight(to_tsvector(coalesce(c.content, '')), 'D'),
-                        query, %s) DESC
+                        id,
+                        title,
+                        section,
+                        content,
+                        source_url
+                    FROM textsearch_vector, query
+                    WHERE ts_query @@ ts_vector
+                    ORDER BY ts_rank(%s::real[], ts_vector, ts_query, %s) DESC
                     LIMIT %s
                     """
                 ).format(self.chunks_table_identifier, self.documents_table_identifier),
-                (query, "nl", weights, normalization, num_results)
+                ("nl", query, list(weights.values()), normalization, num_results)
             ).fetchall()
         except Exception as e:
             self.logger.error(f"Unable to fetch results: {e}")
