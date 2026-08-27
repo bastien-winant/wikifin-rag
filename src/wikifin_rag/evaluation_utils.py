@@ -189,6 +189,6 @@ def evaluate(ground_truth, search_function):
     relevance_total = compute_relevance_total(ground_truth, search_function)
 
     return {
-        "hit_rate": hit_rate(relevance_total),
-        "mrr": mrr(relevance_total),
+        "hit_rate": round(hit_rate(relevance_total), 4),
+        "mrr": round(mrr(relevance_total), 4),
     }

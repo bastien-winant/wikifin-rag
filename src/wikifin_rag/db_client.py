@@ -228,7 +228,6 @@ class PostgresClient():
                         content,
                         source_url
                     FROM textsearch_vector, query
-                    WHERE ts_query @@ ts_vector
                     ORDER BY ts_rank(%s::real[], ts_vector, ts_query, %s) DESC
                     LIMIT %s
                     """
