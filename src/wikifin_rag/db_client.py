@@ -1,7 +1,6 @@
 from dotenv import load_dotenv
 import os
 from psycopg import connect, sql, rows
-from dataclasses import asdict
 from wikifin_rag.embedder import Embedder
 from wikifin_rag.config import PROJECT_ROOT
 from wikifin_rag.utils import vec_to_str, text_to_chunks

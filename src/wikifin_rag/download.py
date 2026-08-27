@@ -1,7 +1,7 @@
 import os
 import shutil
 import logging
-from config import PROJECT_ROOT
+from wikifin_rag.config import PROJECT_ROOT
 from huggingface_hub import hf_hub_download, list_repo_files
 
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
