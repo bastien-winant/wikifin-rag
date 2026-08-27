@@ -90,14 +90,11 @@ class RAGBase:
 
 
     def llm(self, prompt):
-        input_messages = [
-            {"role": "developer", "content": self.instructions},
-            {"role": "user", "content": prompt}
-        ]
-
         response = self.llm_client.responses.create(
             model=self.model,
-            input=input_messages
+            instructions=self.instructions,
+            input=prompt,
+            temperature=0.0
         )
 
         self.last_usage = response.usage
