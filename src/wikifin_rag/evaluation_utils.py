@@ -28,14 +28,10 @@ def calc_total_price(usages):
 
 
 def llm_structured(client, instructions, user_prompt, output_type, model="gpt-5.4-mini"):
-    messages = [
-        {"role": "developer", "content": instructions},
-        {"role": "user", "content": user_prompt}
-    ]
-
     response = client.responses.parse(
         model=model,
-        input=messages,
+        instructions=instructions,
+        input=user_prompt,
         text_format=output_type
     )
 
