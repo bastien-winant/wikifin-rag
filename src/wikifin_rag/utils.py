@@ -18,3 +18,19 @@ def text_to_chunks(text, chunk_size, overlap):
         chunks[i] = chunk
 
     return chunks
+
+
+def rrf(search_results, k=1, num_results=10):
+    scores = {}
+    doc_map = {}
+
+    for results in search_results:
+        for rank, doc in enumerate(results):
+            key = doc["id"]
+            if key not in scores:
+                scores[key] = 0
+                doc_map[key] = doc
+            scores[key] += 1 / (k + rank + 1)
+
+    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    return [doc_map[key] for key, _ in ranked[:num_results]]

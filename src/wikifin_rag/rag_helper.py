@@ -45,30 +45,6 @@ class RAGBase:
         self.last_usage = None
 
 
-    def rrf(self, search_results, k=1, num_results=10):
-        scores = {}
-        doc_map = {}
-
-        for results in search_results:
-            for rank, doc in enumerate(results):
-                key = doc["id"]
-                if key not in scores:
-                    scores[key] = 0
-                    doc_map[key] = doc
-                scores[key] += 1 / (k + rank + 1)
-
-        ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-        return [doc_map[key] for key, _ in ranked[:num_results]]
-
-
-    def search(self, query, weights=None, normalization=0, num_results=5):
-        self.db_client.open_connection()
-        text_search_results = self.db_client.text_search(query=query, weights=weights, normalization=normalization, num_results=num_results)
-        vector_search_results = self.db_client.vector_search(query=query, num_results=num_results)
-        self.db_client.close_connection()
-        return self.rrf([text_search_results, vector_search_results], num_results=num_results)
-
-
     def build_context(self, search_results):
         lines = []
 
@@ -103,8 +79,8 @@ class RAGBase:
         return response.output_text
 
 
-    def rag(self, query):
-        search_results = self.search(query)
+    def rag(self, query, num_results=5):
+        search_results = self.db_client.vector_search(query=query, num_results=num_results)
         prompt = self.build_prompt(query, search_results)
         answer = self.llm(prompt)
         return answer

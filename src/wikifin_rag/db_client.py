@@ -2,8 +2,7 @@ from dotenv import load_dotenv
 import os
 from psycopg import connect, sql, rows
 from wikifin_rag.embedder import Embedder
-from wikifin_rag.config import PROJECT_ROOT
-from wikifin_rag.utils import vec_to_str, text_to_chunks
+from wikifin_rag.utils import vec_to_str, text_to_chunks, rrf
 import logging
 
 
@@ -272,25 +271,10 @@ class PostgresClient():
             self.logger.error(f"Unable to fetch results: {e}")
 
 
-    def copy_table_to_csv(self, dest="data"):
-        dest = PROJECT_ROOT / dest
-        dest.mkdir(parents=True, exist_ok=True)
-
+    def hybrid_search(self, query, weights=None, normalization=0, num_results=5):
         try:
-            with open(dest / "chunks.csv", "wb") as f:
-                with self.cur.copy(
-                    sql.SQL("COPY (SELECT * FROM {}) TO STDOUT WITH CSV HEADER").format(self.chunks_table_identifier)
-                ) as copy:
-                    while data := copy.read():
-                        f.write(data)
-            self.logger.info(f"Table data copied to {dest}/chunks.csv")
-
-            with open(dest / "documents.csv", "wb") as f:
-                with self.cur.copy(
-                    sql.SQL("COPY (SELECT * FROM {}) TO STDOUT WITH CSV HEADER").format(self.documents_table_identifier)
-                ) as copy:
-                    while data := copy.read():
-                        f.write(data)
-            self.logger.info(f"Table data copied to {dest}/documents.csv")
+            text_search_results = self.text_search(query=query, weights=weights, normalization=normalization, num_results=num_results)
+            vector_search_results = self.vector_search(query=query, num_results=num_results)
+            return rrf([text_search_results, vector_search_results], num_results=num_results)
         except Exception as e:
-            self.logger.error("Error copying the data to the file: {}".format(e))
+            self.logger.error(f"Unable to fetch results: {e}")
