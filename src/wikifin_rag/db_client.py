@@ -197,8 +197,15 @@ class PostgresClient():
     
     def text_search(self, query, weights=None, normalization=0, num_results=5):
         try:
-            if weights is None:
-                weights = {'A': 0.1, 'B': 0.2, 'C': 0.4, 'D': 1.0}
+            weight_values = [0.1, 0.2, 0.4, 1.0]
+
+            if type(weights) == dict and set(weights.keys()) == {'title_weight', 'description_weight', 'section_weight', 'content_weight'}:
+                weight_values = [
+                    weights["title_weight"],
+                    weights["description_weight"],
+                    weights["section_weight"],
+                    weights["content_weight"]
+                ]
 
             return self.cur.execute(
                 sql.SQL(
@@ -231,7 +238,7 @@ class PostgresClient():
                     LIMIT %s
                     """
                 ).format(self.chunks_table_identifier, self.documents_table_identifier),
-                ("nl", query, list(weights.values()), normalization, num_results)
+                ("nl", query, weight_values, normalization, num_results)
             ).fetchall()
         except Exception as e:
             self.logger.error(f"Unable to fetch results: {e}")

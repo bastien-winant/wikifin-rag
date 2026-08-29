@@ -61,9 +61,9 @@ class RAGBase:
         return [doc_map[key] for key, _ in ranked[:num_results]]
 
 
-    def search(self, query, num_results=10):
+    def search(self, query, weights=None, normalization=0, num_results=5):
         self.db_client.open_connection()
-        text_search_results = self.db_client.text_search(query=query, num_results=num_results)
+        text_search_results = self.db_client.text_search(query=query, weights=weights, normalization=normalization, num_results=num_results)
         vector_search_results = self.db_client.vector_search(query=query, num_results=num_results)
         self.db_client.close_connection()
         return self.rrf([text_search_results, vector_search_results], num_results=num_results)
