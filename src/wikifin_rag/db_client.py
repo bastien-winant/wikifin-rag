@@ -1,9 +1,17 @@
+import logging
+from wikifin_rag.config import PROJECT_ROOT
 from dotenv import load_dotenv
 import os
 from psycopg import connect, sql, rows
 from wikifin_rag.embedder import Embedder
 from wikifin_rag.utils import vec_to_str, chunk_document_batch, rrf
-import logging
+
+dest = PROJECT_ROOT / "logs"
+dest.mkdir(parents=True, exist_ok=True)
+fh = logging.FileHandler(PROJECT_ROOT / "logs" / "db_logs.log")
+fh.setLevel(logging.DEBUG)
+formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+fh.setFormatter(formatter)
 
 
 class PostgresClient():
@@ -22,6 +30,7 @@ class PostgresClient():
         self.embedder = embedder
 
         self.logger = logging.getLogger(__name__)
+        self.logger.addHandler(fh)
 
 
     def open_connection(self, autocommit=True):
