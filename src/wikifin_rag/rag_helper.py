@@ -16,7 +16,6 @@ CONTEXT:
 {context}
 '''.strip()
 
-from wikifin_rag.db_client import PostgresClient
 from wikifin_rag.evaluation_utils import calc_total_price
 
 
@@ -24,13 +23,11 @@ class RAGBase:
 
     def __init__(
         self,
-        embedder,
         llm_client,
         instructions=INSTRUCTIONS,
         prompt_template=PROMPT_TEMPLATE,
         model='gpt-5.4-mini'
     ):
-        self.db_client = PostgresClient(embedder=embedder)
         self.llm_client = llm_client
         self.instructions = instructions
         self.prompt_template = prompt_template
@@ -79,8 +76,8 @@ class RAGBase:
         return response.output_text
 
 
-    def rag(self, query, num_results=5):
-        search_results = self.db_client.vector_search(query=query, num_results=num_results)
+    def rag(self, query, search_function):
+        search_results = search_function(query)
         prompt = self.build_prompt(query, search_results)
         answer = self.llm(prompt)
         return answer

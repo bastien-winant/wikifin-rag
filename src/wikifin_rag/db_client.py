@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 import os
 from psycopg import connect, sql, rows
 from wikifin_rag.embedder import Embedder
-from wikifin_rag.utils import vec_to_str, text_to_chunks, rrf
+from wikifin_rag.utils import vec_to_str, chunk_document_batch, rrf
 import logging
 
 
@@ -111,25 +111,6 @@ class PostgresClient():
             self.logger.error(f"The tables could not be created: {e}")
 
 
-    def chunk_batch(self, batch, chunk_size, overlap):
-        chunked_batch = []
-
-        for document in batch:
-            # split the document content into chunks
-            chunks = text_to_chunks(document.content, chunk_size, overlap)
-
-            for chunk_id, chunk_text in chunks.items():
-                chunked_batch.append({
-                    "document_id": document.id, # keep the document ID for reference
-                    "chunk_id": chunk_id, # chunk sequence ID
-                    "title": document.title,
-                    "section": document.section,
-                    "content": chunk_text
-                })
-
-        return chunked_batch
-
-
     def insert_batch(self, batch):
         try:
             # UPLOAD DOCUMENTS
@@ -162,9 +143,9 @@ class PostgresClient():
 
 
             # SPLIT DOCUMENTS INTO CHUNKS AND GENERATE EMBEDDINGS
-            chunked_batch = self.chunk_batch(batch, 300, 50) # list of dictionaries
+            chunked_batch = chunk_document_batch(batch, 300, 50)
 
-            batch_texts = [f"Document: {chunk["title"]}\nSection: {chunk["section"]}\n\n{chunk['content']}" for chunk in chunked_batch]
+            batch_texts = [f"Document: {chunk['title']}\nSection: {chunk['section']}\n\n{chunk['content']}" for chunk in chunked_batch]
             embeddings = self.embedder.encode_batch(batch_texts)
 
             # UPLOAD CHUNKS

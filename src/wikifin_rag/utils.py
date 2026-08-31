@@ -20,6 +20,25 @@ def text_to_chunks(text, chunk_size, overlap):
     return chunks
 
 
+def chunk_document_batch(batch, chunk_size, overlap):
+    chunked_batch = []
+
+    for document in batch:
+        # split the document content into chunks
+        chunks = text_to_chunks(document.content, chunk_size, overlap)
+
+        for chunk_id, chunk_text in chunks.items():
+            chunked_batch.append({
+                "document_id": document.id, # keep the document ID for reference
+                "chunk_id": chunk_id, # chunk sequence ID
+                "title": document.title,
+                "section": document.section,
+                "content": chunk_text
+            })
+
+    return chunked_batch
+
+
 def rrf(search_results, k=1, num_results=10):
     scores = {}
     doc_map = {}
