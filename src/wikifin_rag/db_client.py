@@ -1,5 +1,6 @@
 import logging
 from wikifin_rag.config import PROJECT_ROOT
+from datetime import date
 from dotenv import load_dotenv
 import os
 from psycopg import connect, sql, rows
@@ -8,8 +9,12 @@ from wikifin_rag.utils import vec_to_str, chunk_document_batch, rrf
 
 dest = PROJECT_ROOT / "logs"
 dest.mkdir(parents=True, exist_ok=True)
-fh = logging.FileHandler(PROJECT_ROOT / "logs" / "db_logs.log")
-fh.setLevel(logging.DEBUG)
+
+# LOG_FILENAME = 'db_logs.log'
+LOG_FILENAME = f"db_logs__{date.today().strftime("%d_%m_%y")}.log"
+
+fh = logging.FileHandler(PROJECT_ROOT / "logs" / LOG_FILENAME)
+fh.setLevel(logging.WARNING)
 formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 fh.setFormatter(formatter)
 
