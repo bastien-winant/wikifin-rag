@@ -5,6 +5,7 @@ from wikifin_rag.embedder import Embedder
 from wikifin_rag.db_client import PostgresClient
 import sys
 
+
 def search_function(query):
     embedder = Embedder()
     db_client = PostgresClient(embedder=embedder)
@@ -16,12 +17,14 @@ def search_function(query):
 
     return results
 
+
 def create_assistant():
     load_dotenv(override=True)
     openai_client = OpenAI()
     assistant = RAGBase(llm_client=openai_client)
 
     return assistant
+
 
 if __name__ == "__main__":
     assistant = create_assistant()

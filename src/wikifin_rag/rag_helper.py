@@ -16,7 +16,9 @@ CONTEXT:
 {context}
 '''.strip()
 
-from wikifin_rag.evaluation_utils import calc_total_price
+import time
+from wikifin_rag.items import LLMCallRecord
+from wikifin_rag.evaluation_utils import calc_price
 
 
 class RAGBase:
@@ -33,13 +35,31 @@ class RAGBase:
         self.prompt_template = prompt_template
         self.model = model
 
-        self.usages = []
-        self.last_usage = None
+        self.calls = []
+        self.last_call: LLMCallRecord = None
+
+    def _log_response(self, prompt, response, response_time):
+        usage = response.usage
+        cost = calc_price(usage)
+
+        call_record = LLMCallRecord(
+            model=self.model,
+            prompt=prompt,
+            instructions=self.instructions,
+            answer=response.output_text,
+            prompt_tokens=usage.input_tokens,
+            completion_tokens=usage.output_tokens,
+            total_tokens=usage.total_tokens,
+            response_time=response_time,
+            cost=cost["total_cost"],
+        )
+    
+        print(call_record)
+        self.last_call = call_record
 
 
-    def reset_usage(self):
-        self.usages = []
-        self.last_usage = None
+    def reset_calls(self):
+        self.calls = []
 
 
     def build_context(self, search_results):
@@ -63,15 +83,17 @@ class RAGBase:
 
 
     def llm(self, prompt):
+        start_time = time.time()
         response = self.llm_client.responses.create(
             model=self.model,
             instructions=self.instructions,
             input=prompt,
             temperature=0.0
         )
+        response_time = time.time() - start_time
 
-        self.last_usage = response.usage
-        self.usages.append(response.usage)
+        self._log_response(prompt, response, response_time)
+        self.calls.append(response.usage)
 
         return response.output_text
 
@@ -81,7 +103,3 @@ class RAGBase:
         prompt = self.build_prompt(query, search_results)
         answer = self.llm(prompt)
         return answer
-    
-
-    def total_cost(self):
-        return calc_total_price(self.usages)
