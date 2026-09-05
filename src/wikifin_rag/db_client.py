@@ -370,39 +370,40 @@ class ConversationsClient(DBClient):
         timestamp = datetime.now(self.DB_TIMEZONE)
 
         try:
-            self.cur.execute(
-                sql.SQL(
-                    """
-                    INSERT INTO {} (
-                        question, answer, model, instructions, prompt,
-                        prompt_tokens, completion_tokens, total_tokens,
-                        response_time, cost, timestamp
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+            with self.get_db_connection() as con:
+                with con.cursor() as cur:
+                    cur.execute(
+                        sql.SQL(
+                            """
+                            INSERT INTO {} (
+                                question, answer, model, instructions, prompt,
+                                prompt_tokens, completion_tokens, total_tokens,
+                                response_time, cost, timestamp
+                            ) VALUES (
+                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                            )
+                            RETURNING id
+                            """
+                        ).format(self.conversations_table_identifier),
+                        (
+                            question,
+                            record.answer,
+                            record.model,
+                            record.instructions,
+                            record.prompt,
+                            record.prompt_tokens,
+                            record.completion_tokens,
+                            record.total_tokens,
+                            record.response_time,
+                            record.cost,
+                            timestamp,
+                        ),
                     )
-                    RETURNING id
-                    """
-                ).format(self.conversations_table_identifier),
-                (
-                    question,
-                    record.answer,
-                    record.model,
-                    record.instructions,
-                    record.prompt,
-                    record.prompt_tokens,
-                    record.completion_tokens,
-                    record.total_tokens,
-                    record.response_time,
-                    record.cost,
-                    timestamp,
-                ),
-            )
 
-            conversation_id = self.cur.fetchone()[0]
+                    conversation_id = cur.fetchone()['id']
 
-            return conversation_id
+                    return conversation_id
         except Exception as e:
-            self.con.rollback()
             self.logger.error(f"Error writing conversation data: {e}")
             raise
 
@@ -412,22 +413,23 @@ class ConversationsClient(DBClient):
         timestamp = datetime.now(self.DB_TIMEZONE)
         
         try:
-            self.cur.execute(
-                sql.SQL(
-                    """
-                    INSERT INTO {} (
-                        conversation_id, source, relevance,
-                        explanation, score, timestamp
-                    ) VALUES (
-                        %s, %s, %s, %s, %s, %s
+            with self.get_db_connection() as con:
+                with con.cursor() as cur:
+                    cur.execute(
+                        sql.SQL(
+                            """
+                            INSERT INTO {} (
+                                conversation_id, source, relevance,
+                                explanation, score, timestamp
+                            ) VALUES (
+                                %s, %s, %s, %s, %s, %s
+                            )
+                            """
+                        ).format(self.feedback_table_identifier),
+                        (conversation_id, source, relevance,
+                        explanation, score, timestamp),
                     )
-                    """
-                ).format(self.feedback_table_identifier),
-                (conversation_id, source, relevance,
-                 explanation, score, timestamp),
-            )
 
         except Exception as e:
-            self.con.rollback()
             self.logger.error(f"Error writing feedback data: {e}")
             raise

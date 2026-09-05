@@ -1,5 +1,3 @@
-import json
-
 from pydantic import BaseModel
 from typing import Literal
 from openai import OpenAI
@@ -29,6 +27,7 @@ Generated Answer: {answer}
 
 def evaluate_relevance(question, answer, client=None):
     if client is None:
+        load_dotenv(override=True)
         client = OpenAI()
 
     prompt = judge_prompt.format(
@@ -36,7 +35,7 @@ def evaluate_relevance(question, answer, client=None):
         answer=answer
     )
 
-    result, usage = llm_structured_retry(
+    result, _ = llm_structured_retry(
         client,
         INSTRUCTIONS,
         prompt,

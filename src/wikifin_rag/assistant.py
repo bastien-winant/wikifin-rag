@@ -3,7 +3,6 @@ from openai import OpenAI
 from wikifin_rag.rag_helper import RAGBase
 from wikifin_rag.embedder import Embedder
 from wikifin_rag.db_client import DocumentsClient
-import sys
 
 
 def search_function(query):
