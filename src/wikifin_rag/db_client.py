@@ -6,25 +6,23 @@ import os
 from psycopg import connect, sql, rows
 from wikifin_rag.embedder import Embedder
 from wikifin_rag.utils import vec_to_str, chunk_document_batch, rrf
+from datetime import datetime
 
-dest = PROJECT_ROOT / "logs"
+
+dest = PROJECT_ROOT / "logs" / "db"
 dest.mkdir(parents=True, exist_ok=True)
 
-# LOG_FILENAME = 'db_logs.log'
-LOG_FILENAME = f"db_logs__{date.today().strftime("%d_%m_%y")}.log"
+LOG_FILENAME = f"{date.today().strftime("%d_%m_%y")}.log"
 
-fh = logging.FileHandler(PROJECT_ROOT / "logs" / LOG_FILENAME)
+fh = logging.FileHandler(dest / LOG_FILENAME)
 fh.setLevel(logging.WARNING)
 formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
 fh.setFormatter(formatter)
 
 
-class PostgresClient():
-    def __init__(self, embedder=Embedder()):
+class DBClient():
+    def __init__(self):
         load_dotenv(override=True)
-
-        self.documents_table_identifier = sql.Identifier("documents")
-        self.chunks_table_identifier = sql.Identifier("chunks")
 
         self.db_host = "localhost"
         self.db_port = 5432
@@ -32,10 +30,26 @@ class PostgresClient():
         self.db_user = os.environ['POSTGRES_USER']
         self.db_password = os.environ['POSTGRES_PASSWORD']
 
-        self.embedder = embedder
-
         self.logger = logging.getLogger(__name__)
         self.logger.addHandler(fh)
+
+        self.DB_TIMEZONE = datetime.now().astimezone().tzinfo
+
+
+    def get_db_connection(self, autocommit=True):
+        try:
+            return connect(
+                host=self.db_host,
+                port=self.db_port,
+                dbname=self.db_name,
+                user=self.db_user,
+                password=self.db_password,
+                autocommit=autocommit,
+                row_factory=rows.dict_row
+            )
+        except Exception:
+            self.logger.exception("Unable to open the database connection")
+            raise
 
 
     def open_connection(self, autocommit=True):
@@ -53,6 +67,7 @@ class PostgresClient():
             self.cur = self.con.cursor()
         except Exception as e:
             self.logger.error(f"Unable to open the database connection: {e}")
+            raise
 
 
     def close_connection(self):
@@ -63,63 +78,76 @@ class PostgresClient():
             self.logger.error(f"Unable to close the database connection: {e}")
 
 
-    def create_tables(self, drop=False):
+
+class DocumentsClient(DBClient):
+    def __init__(self, embedder=Embedder(), *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.documents_table_identifier = sql.Identifier("documents")
+        self.chunks_table_identifier = sql.Identifier("chunks")
+
+        self.embedder = embedder
+
+
+    def init_db(self, drop=False):
         try:
-            if drop:
-                self.cur.execute(
-                    sql.SQL("DROP TABLE IF EXISTS {};").format(self.chunks_table_identifier)
-                )
-                self.cur.execute(
-                    sql.SQL("DROP TABLE IF EXISTS {};").format(self.documents_table_identifier)
-                )
+            with self.get_db_connection() as con:
+                with con.cursor() as cur:
+                    if drop:
+                        cur.execute(
+                            sql.SQL("DROP TABLE IF EXISTS {};").format(self.chunks_table_identifier)
+                        )
+                        cur.execute(
+                            sql.SQL("DROP TABLE IF EXISTS {};").format(self.documents_table_identifier)
+                        )
 
-            self.cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+                    cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 
-            self.cur.execute(
-                sql.SQL(
-                    """
-                    CREATE TABLE IF NOT EXISTS {} (
-                        id TEXT PRIMARY KEY,
-                        source_url TEXT NOT NULL,
-                        language TEXT,
-                        updated_on DATE,
-                        title TEXT,
-                        description TEXT,
-                        section TEXT,
-                        html TEXT,
-                        content TEXT,
-                        related_links TEXT[],
-                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                    );
-                    """
-                ).format(self.documents_table_identifier)
-            )
-            
-            self.cur.execute(
-                sql.SQL(
-                    """
-                    CREATE TABLE IF NOT EXISTS {} (
-                        document_id TEXT REFERENCES {} (id),
-                        chunk_id TEXT NOT NULL,
-                        content TEXT,
-                        embedding vector(768),
-                        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                        PRIMARY KEY (document_id, chunk_id)
-                    );
-                    """
-                ).format(self.chunks_table_identifier, self.documents_table_identifier)
-            )
+                    cur.execute(
+                        sql.SQL(
+                            """
+                            CREATE TABLE IF NOT EXISTS {} (
+                                id TEXT PRIMARY KEY,
+                                source_url TEXT NOT NULL,
+                                language TEXT,
+                                updated_on DATE,
+                                title TEXT,
+                                description TEXT,
+                                section TEXT,
+                                html TEXT,
+                                content TEXT,
+                                related_links TEXT[],
+                                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                            );
+                            """
+                        ).format(self.documents_table_identifier)
+                    )
+                    
+                    cur.execute(
+                        sql.SQL(
+                            """
+                            CREATE TABLE IF NOT EXISTS {} (
+                                document_id TEXT REFERENCES {} (id),
+                                chunk_id TEXT NOT NULL,
+                                content TEXT,
+                                embedding vector(768),
+                                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                                PRIMARY KEY (document_id, chunk_id)
+                            );
+                            """
+                        ).format(self.chunks_table_identifier, self.documents_table_identifier)
+                    )
 
-            self.cur.execute(
-                sql.SQL(
-                    """
-                    CREATE INDEX ON {}
-                    USING hnsw (embedding vector_cosine_ops)
-                    """
-                ).format(self.chunks_table_identifier)
-            )
+                    cur.execute(
+                        sql.SQL(
+                            """
+                            CREATE INDEX ON {}
+                            USING hnsw (embedding vector_cosine_ops)
+                            """
+                        ).format(self.chunks_table_identifier)
+                    )
 
-            self.logger.info("The database tables have been created.")
+                    self.logger.info("The database tables have been created.")
 
         except Exception as e:
             self.logger.error(f"The tables could not be created: {e}")
@@ -273,3 +301,133 @@ class PostgresClient():
             return rrf([text_search_results, vector_search_results], num_results=num_results)
         except Exception as e:
             self.logger.error(f"Unable to fetch results: {e}")
+
+
+
+class ConversationsClient(DBClient):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.conversations_table_identifier = sql.Identifier("conversations")
+        self.feedback_table_identifier = sql.Identifier("feedback")
+
+
+    def init_db(self, drop=False):
+        try:
+            with self.get_db_connection() as con:
+                with con.cursor() as cur:
+                    if drop:
+                        cur.execute(
+                            sql.SQL("DROP TABLE IF EXISTS {};").format(self.conversations_table_identifier)
+                        )
+
+                        cur.execute(
+                            sql.SQL("DROP TABLE IF EXISTS {};").format(self.feedback_table_identifier)
+                        )
+
+                    cur.execute(
+                        sql.SQL(
+                            """
+                            CREATE TABLE IF NOT EXISTS {} (
+                                id SERIAL PRIMARY KEY,
+                                question TEXT NOT NULL,
+                                answer TEXT NOT NULL,
+                                model TEXT NOT NULL,
+                                instructions TEXT NOT NULL,
+                                prompt TEXT NOT NULL,
+                                prompt_tokens INTEGER NOT NULL,
+                                completion_tokens INTEGER NOT NULL,
+                                total_tokens INTEGER NOT NULL,
+                                response_time FLOAT NOT NULL,
+                                cost FLOAT NOT NULL,
+                                timestamp TIMESTAMP WITH TIME ZONE NOT NULL
+                            );
+                            """
+                        ).format(self.conversations_table_identifier)
+                    )
+
+                    cur.execute(
+                        sql.SQL("""
+                            CREATE TABLE IF NOT EXISTS {} (
+                                id SERIAL PRIMARY KEY,
+                                conversation_id INTEGER REFERENCES conversations(id),
+                                source TEXT NOT NULL,
+                                relevance TEXT,
+                                explanation TEXT,
+                                score INTEGER,
+                                timestamp TIMESTAMP WITH TIME ZONE NOT NULL
+                            )
+                        """).format(self.feedback_table_identifier)
+                    )
+
+                    self.logger.info("The database tables have been created.")
+
+        except Exception as e:
+            self.logger.error(f"The tables could not be created: {e}")
+
+
+    def save_conversation(self, record, question):
+        timestamp = datetime.now(self.DB_TIMEZONE)
+
+        try:
+            self.cur.execute(
+                sql.SQL(
+                    """
+                    INSERT INTO {} (
+                        question, answer, model, instructions, prompt,
+                        prompt_tokens, completion_tokens, total_tokens,
+                        response_time, cost, timestamp
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+                    )
+                    RETURNING id
+                    """
+                ).format(self.conversations_table_identifier),
+                (
+                    question,
+                    record.answer,
+                    record.model,
+                    record.instructions,
+                    record.prompt,
+                    record.prompt_tokens,
+                    record.completion_tokens,
+                    record.total_tokens,
+                    record.response_time,
+                    record.cost,
+                    timestamp,
+                ),
+            )
+
+            conversation_id = self.cur.fetchone()[0]
+
+            return conversation_id
+        except Exception as e:
+            self.con.rollback()
+            self.logger.error(f"Error writing conversation data: {e}")
+            raise
+
+
+    def save_feedback(self, conversation_id, source, relevance=None,
+                  explanation=None, score=None):
+        timestamp = datetime.now(self.DB_TIMEZONE)
+        
+        try:
+            self.cur.execute(
+                sql.SQL(
+                    """
+                    INSERT INTO {} (
+                        conversation_id, source, relevance,
+                        explanation, score, timestamp
+                    ) VALUES (
+                        %s, %s, %s, %s, %s, %s
+                    )
+                    """
+                ).format(self.feedback_table_identifier),
+                (conversation_id, source, relevance,
+                 explanation, score, timestamp),
+            )
+
+        except Exception as e:
+            self.con.rollback()
+            self.logger.error(f"Error writing feedback data: {e}")
+            raise

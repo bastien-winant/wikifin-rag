@@ -5,7 +5,7 @@ from trafilatura import extract_metadata
 from bs4 import BeautifulSoup
 from datetime import datetime
 from hashlib import sha256
-from wikifin_rag.db_client import PostgresClient
+from wikifin_rag.db_client import DocumentsClient
 
 
 def has_class(selector, classname):
@@ -32,7 +32,7 @@ class PagesSpider(scrapy.Spider):
 
         self.batch_size = int(batch_size)
 
-        self.db_client = PostgresClient()
+        self.db_client = DocumentsClient()
         self.batch = Batch(
             documents=[],
             size=self.batch_size,
@@ -41,8 +41,9 @@ class PagesSpider(scrapy.Spider):
         )
 
         drop_tables = str(getattr(self, "drop_tables", "False")).lower() == "true"
+        self.db_client.init_db(drop=drop_tables)
         self.db_client.open_connection()
-        self.db_client.create_tables(drop=drop_tables)
+
 
 
     def parse(self, response):
