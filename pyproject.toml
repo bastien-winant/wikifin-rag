@@ -19,6 +19,7 @@ dependencies = [
     "python-dotenv>=1.2.2",
     "scrapy>=2.17.0",
     "seaborn>=0.13.2",
+    "streamlit>=1.63.0",
     "tokenizers>=0.23.1",
     "tqdm>=4.70.0",
     "trafilatura>=2.2.0",
