@@ -1,8 +1,9 @@
 import os
 import shutil
 import logging
-from wikifin_rag.config import PROJECT_ROOT
+from pathlib import Path
 from huggingface_hub import hf_hub_download, list_repo_files
+from wikifin_rag.config import PROJECT_ROOT
 
 os.environ["HF_HUB_DISABLE_TELEMETRY"] = "1"
 logging.getLogger("huggingface_hub").setLevel(logging.ERROR)
@@ -13,8 +14,8 @@ ONNX_CANDIDATES = [
     "model.onnx",
 ]
 
-def download(repo, dest="models"):
-    dest = PROJECT_ROOT / dest / repo
+def download(repo, dest=PROJECT_ROOT / "models"):
+    dest = Path(dest) / repo
     dest.mkdir(parents=True, exist_ok=True)
 
     files = list_repo_files(repo_id=repo)
@@ -45,4 +46,4 @@ def download(repo, dest="models"):
             print(f"  exists {dst}")
 
 if __name__ == "__main__":
-    download("Xenova/multilingual-e5-base")
+    download("Xenova/multilingual-e5-small")

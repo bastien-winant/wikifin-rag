@@ -1,12 +1,13 @@
 import logging
 from wikifin_rag.config import PROJECT_ROOT
+from pathlib import Path
 from datetime import date
-from dotenv import load_dotenv
-import os
-from psycopg import connect, sql, rows
+import json
+import sqlite3
 from wikifin_rag.embedder import Embedder
-from wikifin_rag.utils import vec_to_str, chunk_document_batch, rrf
+from wikifin_rag.utils import chunk_document_batch
 from datetime import datetime
+from wikifin_rag.db_utils import record_factory, stats_factory
 
 
 dest = PROJECT_ROOT / "logs" / "db"
@@ -21,14 +22,8 @@ fh.setFormatter(formatter)
 
 
 class DBClient():
-    def __init__(self):
-        load_dotenv(override=True)
-
-        self.db_host = "localhost"
-        self.db_port = 5432
-        self.db_name = os.environ['POSTGRES_DB']
-        self.db_user = os.environ['POSTGRES_USER']
-        self.db_password = os.environ['POSTGRES_PASSWORD']
+    def __init__(self, db_path):
+        self.db_path = Path(db_path)
 
         self.logger = logging.getLogger(__name__)
         self.logger.addHandler(fh)
@@ -38,398 +33,235 @@ class DBClient():
 
     def get_db_connection(self, autocommit=True):
         try:
-            return connect(
-                host=self.db_host,
-                port=self.db_port,
-                dbname=self.db_name,
-                user=self.db_user,
-                password=self.db_password,
-                autocommit=autocommit,
-                row_factory=rows.dict_row
-            )
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            return sqlite3.connect(self.db_path, autocommit=autocommit)
         except Exception:
             self.logger.exception("Unable to open the database connection")
             raise
 
 
-    def open_connection(self, autocommit=True):
-        try:
-            self.con = connect(
-                host=self.db_host,
-                port=self.db_port,
-                dbname=self.db_name,
-                user=self.db_user,
-                password=self.db_password,
-                autocommit=autocommit,
-                row_factory=rows.dict_row
-            )
+class DocumentsDBClient(DBClient):
+    def __init__(self, db_path=PROJECT_ROOT / "db" / "wikifin_rag.db", embedder=Embedder()):
+        super().__init__(db_path=db_path)
 
-            self.cur = self.con.cursor()
-        except Exception as e:
-            self.logger.error(f"Unable to open the database connection: {e}")
-            raise
-
-
-    def close_connection(self):
-        try:
-            self.cur.close()
-            self.con.close()
-        except Exception as e:
-            self.logger.error(f"Unable to close the database connection: {e}")
-
-
-
-class DocumentsClient(DBClient):
-    def __init__(self, embedder=Embedder(), *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.documents_table_identifier = sql.Identifier("documents")
-        self.chunks_table_identifier = sql.Identifier("chunks")
+        self.documents_table_identifier = "documents"
+        self.chunks_table_identifier = "chunks"
 
         self.embedder = embedder
 
-
     def init_db(self, drop=False):
         try:
             with self.get_db_connection() as con:
-                with con.cursor() as cur:
-                    if drop:
-                        cur.execute(
-                            sql.SQL("DROP TABLE IF EXISTS {};").format(self.chunks_table_identifier)
-                        )
-                        cur.execute(
-                            sql.SQL("DROP TABLE IF EXISTS {};").format(self.documents_table_identifier)
-                        )
+                cur = con.cursor()
 
-                    cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+                if drop:
+                    cur.execute(f"DROP TABLE IF EXISTS {self.chunks_table_identifier};")
+                    cur.execute(f"DROP TABLE IF EXISTS {self.documents_table_identifier};")
 
-                    cur.execute(
-                        sql.SQL(
-                            """
-                            CREATE TABLE IF NOT EXISTS {} (
-                                id TEXT PRIMARY KEY,
-                                source_url TEXT NOT NULL,
-                                language TEXT,
-                                updated_on DATE,
-                                title TEXT,
-                                description TEXT,
-                                section TEXT,
-                                html TEXT,
-                                content TEXT,
-                                related_links TEXT[],
-                                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-                            );
-                            """
-                        ).format(self.documents_table_identifier)
-                    )
-                    
-                    cur.execute(
-                        sql.SQL(
-                            """
-                            CREATE TABLE IF NOT EXISTS {} (
-                                document_id TEXT REFERENCES {} (id),
-                                chunk_id TEXT NOT NULL,
-                                content TEXT,
-                                embedding vector(768),
-                                updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-                                PRIMARY KEY (document_id, chunk_id)
-                            );
-                            """
-                        ).format(self.chunks_table_identifier, self.documents_table_identifier)
-                    )
+                cur.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {self.documents_table_identifier} (
+                        id TEXT PRIMARY KEY,
+                        source_url TEXT NOT NULL,
+                        language TEXT,
+                        updated_on TEXT,
+                        title TEXT,
+                        description TEXT,
+                        section TEXT,
+                        html TEXT,
+                        content TEXT,
+                        related_links TEXT,
+                        updated_at TEXT NOT NULL DEFAULT current_timestamp
+                    );
+                """)
 
-                    cur.execute(
-                        sql.SQL(
-                            """
-                            CREATE INDEX ON {}
-                            USING hnsw (embedding vector_cosine_ops)
-                            """
-                        ).format(self.chunks_table_identifier)
-                    )
+                cur.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {self.chunks_table_identifier} (
+                        document_id TEXT REFERENCES {self.documents_table_identifier} (id),
+                        chunk_id TEXT NOT NULL,
+                        content TEXT,
+                        embedding BLOB,
+                        updated_at TEXT NOT NULL DEFAULT current_timestamp,
+                        PRIMARY KEY (document_id, chunk_id)
+                    );
+                """)
 
-                    self.logger.info("The database tables have been created.")
-
+                self.logger.info("The database tables have been created.")
         except Exception as e:
             self.logger.error(f"The tables could not be created: {e}")
-
+            raise
 
     def insert_batch(self, batch):
         try:
-            # UPLOAD DOCUMENTS
-            self.cur.executemany(
-                sql.SQL(
-                    """
-                    INSERT INTO {} (id, source_url, language, updated_on, title, description, section, html, content, related_links)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            with self.get_db_connection() as con:
+                cur = con.cursor()
+
+                cur.executemany(f"""
+                    INSERT INTO {self.documents_table_identifier} (id, source_url, language, updated_on, title, description, section, html, content, related_links)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT (id) DO NOTHING;
-                    """
-                ).format(self.documents_table_identifier),
-                [
-                    (
-                        document.id,
-                        document.source_url,
-                        document.language,
-                        document.updated_on,
-                        document.title,
-                        document.description,
-                        document.section,
-                        document.html,
-                        document.content,
-                        document.related_links
-                    )
-                    for document in batch if document.content
-                ],
-                returning=True
-            )
-            self.logger.info(f"Upserted {len(batch)} document records.")
+                    """,
+                    [
+                        (
+                            document.id,
+                            document.source_url,
+                            document.language,
+                            document.updated_on.strftime(format='%Y-%m-%d %H:%M:%S.%f'),
+                            document.title,
+                            document.description,
+                            document.section,
+                            document.html,
+                            document.content,
+                            json.dumps(document.related_links)
+                        )
+                        for document in batch if document.content
+                    ]
+                )
+                self.logger.info(f"Upserted {len(batch)} document records.")
 
 
-            # SPLIT DOCUMENTS INTO CHUNKS AND GENERATE EMBEDDINGS
-            chunked_batch = chunk_document_batch(batch, 300, 50)
+                # SPLIT DOCUMENTS INTO CHUNKS AND GENERATE EMBEDDINGS
+                chunked_batch = chunk_document_batch(batch, 300, 50)
 
-            batch_texts = [f"Document: {chunk['title']}\nSection: {chunk['section']}\n\n{chunk['content']}" for chunk in chunked_batch]
-            embeddings = self.embedder.encode_batch(batch_texts)
+                batch_texts = [f"Document: {chunk['title']}\nSection: {chunk['section']}\n\n{chunk['content']}" for chunk in chunked_batch]
+                embeddings = self.embedder.encode_batch(batch_texts)
 
-            # UPLOAD CHUNKS
-            self.cur.executemany(
-                sql.SQL(
-                    """
-                    INSERT INTO {} (document_id, chunk_id, content, embedding)
-                    VALUES (%s, %s, %s, %s)
+                cur.executemany(f"""
+                    INSERT INTO {self.chunks_table_identifier} (document_id, chunk_id, content, embedding)
+                    VALUES (?, ?, ?, ?)
                     ON CONFLICT (document_id, chunk_id) DO NOTHING;
-                    """
-                ).format(self.chunks_table_identifier),
-                [
-                    (
-                        chunk["document_id"],
-                        chunk["chunk_id"],
-                        chunk["content"],
-                        vec_to_str(embeddings[i]),
-                    )
-                    for i, chunk in enumerate(chunked_batch) if chunk["content"]
-                ],
-                returning=True
-            )
-            self.logger.info(f"Upserted {len(chunked_batch)} chunk records.")
+                    """,
+                    [
+                        (
+                            chunk["document_id"],
+                            chunk["chunk_id"],
+                            chunk["content"],
+                            embeddings[i].tobytes(),
+                        )
+                        for i, chunk in enumerate(chunked_batch) if chunk["content"]
+                    ]
+                )
+                self.logger.info(f"Upserted {len(chunked_batch)} chunk records.")
         except Exception as e:
-            self.con.rollback()
             self.logger.error(f"Error writing batch data: {e}")
             raise
 
-    
-    def text_search(self, query, weights=None, normalization=0, num_results=5):
-        try:
-            weight_values = [0.1, 0.2, 0.4, 1.0]
 
-            if type(weights) == dict and set(weights.keys()) == {'title_weight', 'description_weight', 'section_weight', 'content_weight'}:
-                weight_values = [
-                    weights["title_weight"],
-                    weights["description_weight"],
-                    weights["section_weight"],
-                    weights["content_weight"]
-                ]
+class MonitoringDBClient(DBClient):
+    def __init__(self, db_path=PROJECT_ROOT / "db" / "wikifin_rag.db"):
+        super().__init__(db_path=db_path)
 
-            return self.cur.execute(
-                sql.SQL(
-                    """
-                    WITH textsearch_vector AS (
-                        SELECT
-                            c.document_id || '_' || c.chunk_id AS id,
-                            d.title,
-                            d.section,
-                            c.content,
-                            d.source_url,
-                            setweight(to_tsvector(coalesce(d.title, '')), 'A') ||
-                                setweight(to_tsvector(coalesce(d.description, '')), 'B') ||
-                                setweight(to_tsvector(coalesce(d.section, '')), 'C') ||
-                                setweight(to_tsvector(coalesce(c.content, '')), 'D') AS ts_vector
-                        FROM {} c
-                        JOIN {} d
-                        ON c.document_id = d.id
-                        WHERE d.language = %s
-                    ),
-                    query AS (SELECT plainto_tsquery(%s) AS ts_query)
-                    SELECT
-                        id,
-                        title,
-                        section,
-                        content,
-                        source_url
-                    FROM textsearch_vector, query
-                    ORDER BY ts_rank(%s::real[], ts_vector, ts_query, %s) DESC
-                    LIMIT %s
-                    """
-                ).format(self.chunks_table_identifier, self.documents_table_identifier),
-                ("nl", query, weight_values, normalization, num_results)
-            ).fetchall()
-        except Exception as e:
-            self.logger.error(f"Unable to fetch results: {e}")
-
-
-    def vector_search(self, query, num_results=5):
-        try:
-            query_vector = self.embedder.encode(query)
-            query_str = vec_to_str(query_vector)
-
-            return self.cur.execute(
-                sql.SQL(
-                    """
-                    SELECT
-                        c.document_id || '_' || c.chunk_id AS id,
-                        d.title,
-                        d.section,
-                        c.content,
-                        d.source_url
-                    FROM {} c
-                    JOIN {} d
-                    ON c.document_id = d.id
-                    WHERE d.language = %s
-                    ORDER BY c.embedding <=> %s::vector
-                    LIMIT %s
-                    """
-                ).format(self.chunks_table_identifier, self.documents_table_identifier),
-                ("nl", query_str, num_results)
-            ).fetchall()
-        except Exception as e:
-            self.logger.error(f"Unable to fetch results: {e}")
-
-
-    def hybrid_search(self, query, weights=None, normalization=0, num_results=5):
-        try:
-            text_search_results = self.text_search(query=query, weights=weights, normalization=normalization, num_results=num_results)
-            vector_search_results = self.vector_search(query=query, num_results=num_results)
-            return rrf([text_search_results, vector_search_results], num_results=num_results)
-        except Exception as e:
-            self.logger.error(f"Unable to fetch results: {e}")
-
-
-
-class ConversationsClient(DBClient):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        self.conversations_table_identifier = sql.Identifier("conversations")
-        self.feedback_table_identifier = sql.Identifier("feedback")
-
+        self.conversations_table_identifier = "conversations"
 
     def init_db(self, drop=False):
         try:
             with self.get_db_connection() as con:
-                with con.cursor() as cur:
-                    if drop:
-                        cur.execute(
-                            sql.SQL("DROP TABLE IF EXISTS {};").format(self.conversations_table_identifier)
-                        )
+                cur = con.cursor()
 
-                        cur.execute(
-                            sql.SQL("DROP TABLE IF EXISTS {};").format(self.feedback_table_identifier)
-                        )
+                if drop:
+                    cur.execute(f"DROP TABLE IF EXISTS {self.conversations_table_identifier};")
 
-                    cur.execute(
-                        sql.SQL(
-                            """
-                            CREATE TABLE IF NOT EXISTS {} (
-                                id SERIAL PRIMARY KEY,
-                                question TEXT NOT NULL,
-                                answer TEXT NOT NULL,
-                                model TEXT NOT NULL,
-                                instructions TEXT NOT NULL,
-                                prompt TEXT NOT NULL,
-                                prompt_tokens INTEGER NOT NULL,
-                                completion_tokens INTEGER NOT NULL,
-                                total_tokens INTEGER NOT NULL,
-                                response_time FLOAT NOT NULL,
-                                cost FLOAT NOT NULL,
-                                timestamp TIMESTAMP WITH TIME ZONE NOT NULL
-                            );
-                            """
-                        ).format(self.conversations_table_identifier)
-                    )
-
-                    cur.execute(
-                        sql.SQL("""
-                            CREATE TABLE IF NOT EXISTS {} (
-                                id SERIAL PRIMARY KEY,
-                                conversation_id INTEGER REFERENCES conversations(id),
-                                source TEXT NOT NULL,
-                                relevance TEXT,
-                                explanation TEXT,
-                                score INTEGER,
-                                timestamp TIMESTAMP WITH TIME ZONE NOT NULL
-                            )
-                        """).format(self.feedback_table_identifier)
-                    )
-
-                    self.logger.info("The database tables have been created.")
-
+                cur.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {self.conversations_table_identifier} (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        query TEXT NOT NULL,
+                        answer TEXT NOT NULL,
+                        model TEXT NOT NULL,
+                        instructions TEXT NOT NULL,
+                        prompt TEXT NOT NULL,
+                        prompt_tokens INTEGER NOT NULL,
+                        completion_tokens INTEGER NOT NULL,
+                        total_tokens INTEGER NOT NULL,
+                        response_time REAL NOT NULL,
+                        input_cost REAL NOT NULL,
+                        output_cost REAL NOT NULL,
+                        total_cost REAL NOT NULL,
+                        timestamp TEXT NOT NULL DEFAULT current_timestamp
+                    );
+                """)
         except Exception as e:
             self.logger.error(f"The tables could not be created: {e}")
+            raise
 
-
-    def save_conversation(self, record, question):
-        timestamp = datetime.now(self.DB_TIMEZONE)
-
+    def save_conversation(self, record, query):
         try:
+            timestamp = datetime.now(self.DB_TIMEZONE).strftime(format='%Y-%m-%d %H:%M:%S.%f')
+
             with self.get_db_connection() as con:
-                with con.cursor() as cur:
-                    cur.execute(
-                        sql.SQL(
-                            """
-                            INSERT INTO {} (
-                                question, answer, model, instructions, prompt,
-                                prompt_tokens, completion_tokens, total_tokens,
-                                response_time, cost, timestamp
-                            ) VALUES (
-                                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
-                            )
-                            RETURNING id
-                            """
-                        ).format(self.conversations_table_identifier),
-                        (
-                            question,
-                            record.answer,
-                            record.model,
-                            record.instructions,
-                            record.prompt,
-                            record.prompt_tokens,
-                            record.completion_tokens,
-                            record.total_tokens,
-                            record.response_time,
-                            record.cost,
-                            timestamp,
-                        ),
+                cur = con.execute(f"""
+                    INSERT INTO {self.conversations_table_identifier} (
+                        query, answer, model, instructions, prompt,
+                        prompt_tokens, completion_tokens, total_tokens,
+                        response_time, input_cost, output_cost, total_cost, timestamp
+                    ) VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                     )
+                    RETURNING id;
+                    """,
+                    (
+                        query,
+                        record.answer,
+                        record.model,
+                        record.instructions,
+                        record.prompt,
+                        record.prompt_tokens,
+                        record.completion_tokens,
+                        record.total_tokens,
+                        record.response_time,
+                        record.input_cost,
+                        record.output_cost,
+                        record.total_cost,
+                        timestamp,
+                    ),
+                )
+                conversation_id = cur.fetchone()[0]
 
-                    conversation_id = cur.fetchone()['id']
-
-                    return conversation_id
+                self.logger.info(f"Inserted new LLM conversation record.")
         except Exception as e:
             self.logger.error(f"Error writing conversation data: {e}")
             raise
 
+        return conversation_id
 
-    def save_feedback(self, conversation_id, source, relevance=None,
-                  explanation=None, score=None):
-        timestamp = datetime.now(self.DB_TIMEZONE)
-        
+    def get_conversations(self, limit=10):
         try:
             with self.get_db_connection() as con:
-                with con.cursor() as cur:
-                    cur.execute(
-                        sql.SQL(
-                            """
-                            INSERT INTO {} (
-                                conversation_id, source, relevance,
-                                explanation, score, timestamp
-                            ) VALUES (
-                                %s, %s, %s, %s, %s, %s
-                            )
-                            """
-                        ).format(self.feedback_table_identifier),
-                        (conversation_id, source, relevance,
-                        explanation, score, timestamp),
-                    )
+                con.row_factory = record_factory
 
+                cur = con.execute(
+                    """
+                    SELECT id, query, answer, model,
+                        instructions, prompt,
+                        prompt_tokens, completion_tokens, total_tokens,
+                        response_time, input_cost, output_cost, total_cost, timestamp
+                    FROM conversations
+                    ORDER BY timestamp DESC
+                    LIMIT ?
+                    """,
+                    (limit,),
+                )
+                rows = cur.fetchall()
         except Exception as e:
-            self.logger.error(f"Error writing feedback data: {e}")
+            self.logger.error(f"Error retrieving the data: {e}")
             raise
+
+        return rows
+
+    def get_stats(self):
+        try:
+            with self.get_db_connection() as con:
+                con.row_factory = stats_factory
+
+                cur = con.execute(f"""
+                    SELECT
+                        COUNT(*),
+                        AVG(response_time),
+                        SUM(total_cost),
+                        AVG(total_tokens)
+                    FROM {self.conversations_table_identifier}
+                """)
+                row = cur.fetchone()
+        except Exception as e:
+            self.logger.error(f"Error retrieving the data: {e}")
+            raise
+
+        return row

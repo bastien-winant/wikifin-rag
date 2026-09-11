@@ -1,7 +1,3 @@
-def vec_to_str(vector):
-    return f"[{",".join(str(x) for x in vector)}]"
-
-
 def text_to_chunks(text, chunk_size, overlap):
     if chunk_size <= 0:
         raise ValueError("chunk_size must be > 0")
@@ -37,19 +33,3 @@ def chunk_document_batch(batch, chunk_size, overlap):
             })
 
     return chunked_batch
-
-
-def rrf(search_results, k=1, num_results=10):
-    scores = {}
-    doc_map = {}
-
-    for results in search_results:
-        for rank, doc in enumerate(results):
-            key = doc["id"]
-            if key not in scores:
-                scores[key] = 0
-                doc_map[key] = doc
-            scores[key] += 1 / (k + rank + 1)
-
-    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-    return [doc_map[key] for key, _ in ranked[:num_results]]

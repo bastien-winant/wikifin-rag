@@ -5,7 +5,7 @@ from trafilatura import extract_metadata
 from bs4 import BeautifulSoup
 from datetime import datetime
 from hashlib import sha256
-from wikifin_rag.db_client import DocumentsClient
+from wikifin_rag.db_client import DocumentsDBClient
 
 
 def has_class(selector, classname):
@@ -32,7 +32,7 @@ class PagesSpider(scrapy.Spider):
 
         self.batch_size = int(batch_size)
 
-        self.db_client = DocumentsClient()
+        self.db_client = DocumentsDBClient()
         self.batch = Batch(
             documents=[],
             size=self.batch_size,
@@ -42,8 +42,6 @@ class PagesSpider(scrapy.Spider):
 
         drop_tables = str(getattr(self, "drop_tables", "False")).lower() == "true"
         self.db_client.init_db(drop=drop_tables)
-        self.db_client.open_connection()
-
 
 
     def parse(self, response):
@@ -203,7 +201,7 @@ class PagesSpider(scrapy.Spider):
 
             yield from response.follow_all(links, self.parse_content_page)
         except Exception as e:
-            self.log(f"Unable to parse page content: {e}", level=logging.ERROR)
+            self.logger.error(f"Unable to parse page content: {e}")
 
 
     def closed(self, reason):
@@ -211,5 +209,4 @@ class PagesSpider(scrapy.Spider):
             self.batch.on_full_callback(self.batch.documents)
             self.batch.clear_documents()
 
-        self.db_client.close_connection()
-        self.log(f"Spider closed with reason: {reason}", level=logging.INFO)
+        self.logger.info(f"Spider closed with reason: {reason}")

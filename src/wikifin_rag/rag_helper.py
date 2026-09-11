@@ -1,12 +1,17 @@
+import time
+from wikifin_rag.items import LLMCallRecord
+from wikifin_rag.evaluation_utils import calculate_cost
+
 INSTRUCTIONS = '''
-Your task is to answer questions about personal finance management
+Your task is to answer questions about finance personal management
 based on the provided context.
 
 Use the context to find relevant information and provide accurate
 answers. If the answer is not found in the context,
-respond with "I was unable to find enough relevant information to provide an answer."
+respond with "I don't know."
 
-When using information from the context in your answer, always include all the related source URLs as reference.
+You never give investment advice or offer opinions. If you are asked for advice,
+respond with "I am not in a position to answer this question. Please talk to a financial advisor.".
 '''
 
 PROMPT_TEMPLATE = '''
@@ -16,31 +21,30 @@ CONTEXT:
 {context}
 '''.strip()
 
-import time
-from wikifin_rag.items import LLMCallRecord
-from wikifin_rag.evaluation_utils import calc_price
-
 
 class RAGBase:
 
     def __init__(
         self,
+        index,
         llm_client,
         instructions=INSTRUCTIONS,
         prompt_template=PROMPT_TEMPLATE,
+        course='llm-zoomcamp',
         model='gpt-5.4-mini'
     ):
+        self.index = index
         self.llm_client = llm_client
         self.instructions = instructions
+        self.course = course
         self.prompt_template = prompt_template
         self.model = model
 
-        self.calls = []
         self.last_call: LLMCallRecord = None
 
     def _log_response(self, prompt, response, response_time):
         usage = response.usage
-        cost = calc_price(usage)
+        cost = calculate_cost(usage)
 
         call_record = LLMCallRecord(
             model=self.model,
@@ -51,16 +55,23 @@ class RAGBase:
             completion_tokens=usage.output_tokens,
             total_tokens=usage.total_tokens,
             response_time=response_time,
-            cost=cost["total_cost"],
+            total_cost=cost["total_cost"],
+            input_cost=cost["input_cost"],
+            output_cost=cost["output_cost"]
         )
     
-        print(call_record)
         self.last_call = call_record
 
+    def search(self, query, num_results=5):
+        boost_dict = {'question': 3.0, 'section': 0.5}
+        filter_dict = {'course': self.course}
 
-    def reset_calls(self):
-        self.calls = []
-
+        return self.index.search(
+            query,
+            num_results=num_results,
+            boost_dict=boost_dict,
+            filter_dict=filter_dict
+        )
 
     def build_context(self, search_results):
         lines = []
@@ -69,11 +80,10 @@ class RAGBase:
             lines.append(f"DOCUMENT: {chunk['title']}")
             lines.append(f"SECTION: {chunk['section']}")
             lines.append(f"CONTENT: {chunk['content']}")
-            lines.append(f"SOURCE: {chunk['source_url']}")
+            lines.append(f"SOURCES: {chunk['source_url']}")
             lines.append('')
 
         return '\n'.join(lines).strip()
-
 
     def build_prompt(self, query, search_results):
         context = self.build_context(search_results)
@@ -81,25 +91,23 @@ class RAGBase:
             question=query, context=context
         )
 
-
     def llm(self, prompt):
         start_time = time.time()
+        
         response = self.llm_client.responses.create(
             model=self.model,
             instructions=self.instructions,
             input=prompt,
             temperature=0.0
         )
-        response_time = time.time() - start_time
 
+        response_time = time.time() - start_time
         self._log_response(prompt, response, response_time)
-        self.calls.append(response.usage)
 
         return response.output_text
 
-
-    def rag(self, query, search_function):
-        search_results = search_function(query)
+    def rag(self, query):
+        search_results = self.search(query)
         prompt = self.build_prompt(query, search_results)
         answer = self.llm(prompt)
         return answer

@@ -1,8 +1,10 @@
 import time
 from tqdm.auto import tqdm
+from concurrent.futures import ThreadPoolExecutor
 
 
-def calc_price(usage):
+
+def calculate_cost(usage):
     input_price_per_million = 0.75
     output_price_per_million = 4.50
 
@@ -17,11 +19,11 @@ def calc_price(usage):
     }
 
 
-def calc_total_price(usages):
+def calculate_total_cost(usages):
     total_cost = 0.0
 
     for usage in usages:
-        cost = calc_price(usage)
+        cost = calculate_cost(usage)
         total_cost = total_cost + cost["total_cost"]
 
     return total_cost
@@ -79,6 +81,24 @@ def map_progress(pool, seq, f):
     return results
 
 
+def compute_relevance(q, search_function):
+    doc_id = q["document"]
+    results = search_function(query=q["question"])
+
+    relevance = []
+    for d in results:
+        relevance.append(int(d["id"] == doc_id))
+
+    return relevance
+
+
+def compute_relevance_total(ground_truth, search_function):
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        relevance_total = map_progress(pool, ground_truth, lambda q: compute_relevance(q, search_function))
+
+    return relevance_total
+
+
 def hit_rate(relevance):
     cnt = 0
 
@@ -101,27 +121,10 @@ def mrr(relevance):
     return total_score / len(relevance)
 
 
-def compute_relevance(q, search_function):
-    doc_id = q["id"]
-    results = search_function(query=q["question"])
-    relevance = [int(d["id"] == doc_id) for d in results]
-    return relevance
-
-
-def compute_relevance_total(ground_truth, search_function):
-    relevance_total = []
-
-    for q in tqdm(ground_truth):
-        relevance = compute_relevance(q, search_function)
-        relevance_total.append(relevance)
-
-    return relevance_total
-
-
 def evaluate(ground_truth, search_function):
     relevance_total = compute_relevance_total(ground_truth, search_function)
 
     return {
-        "hit_rate": round(hit_rate(relevance_total), 4),
-        "mrr": round(mrr(relevance_total), 4),
+        "hit_rate": hit_rate(relevance_total),
+        "mrr": mrr(relevance_total),
     }
