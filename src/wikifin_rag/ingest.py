@@ -38,12 +38,12 @@ def build_text_index(documents):
     return index
 
 
-def build_vector_index(documents):
+def build_vector_index(vectors, documents, **kwargs):
     index = VectorSearchIndex(
         db_path=PROJECT_ROOT / "db" / "sqlitesearch_vectors.db",
-        num_results=5
+        **kwargs
     )
     
     index.clear()
-    index.fit(documents)
+    index.fit(vectors, documents)
     return index
