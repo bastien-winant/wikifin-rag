@@ -61,7 +61,6 @@ class RAGBase:
         self.last_call = call_record
 
     def search(self, query, num_results=5):
-
         return self.index.search(
             query,
             num_results=num_results,
