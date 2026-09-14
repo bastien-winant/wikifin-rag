@@ -7,7 +7,7 @@ import sqlite3
 from wikifin_rag.embedder import Embedder
 from wikifin_rag.utils import chunk_document_batch
 from datetime import datetime
-from wikifin_rag.db_utils import record_factory, stats_factory
+from wikifin_rag.factories import record_factory, stats_factory
 
 
 dest = PROJECT_ROOT / "logs" / "db"

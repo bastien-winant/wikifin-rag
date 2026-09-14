@@ -3,7 +3,6 @@ from tqdm.auto import tqdm
 from concurrent.futures import ThreadPoolExecutor
 
 
-
 def calculate_cost(usage):
     input_price_per_million = 0.75
     output_price_per_million = 4.50

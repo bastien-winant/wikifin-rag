@@ -1,7 +1,7 @@
 from wikifin_rag.db_client import DocumentsDBClient
 from sqlitesearch import TextSearchIndex, VectorSearchIndex
 from wikifin_rag.config import PROJECT_ROOT
-from wikifin_rag.db_utils import dict_factory
+from wikifin_rag.factories import dict_factory
 
 
 def load_wikifin_data(factory=dict_factory):
