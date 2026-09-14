@@ -10,6 +10,7 @@ def dict_factory(_, row):
         "source_url": row[5]
     }
 
+
 def embedding_factory(_, row):
     return {
         "id": row[0],
@@ -19,6 +20,7 @@ def embedding_factory(_, row):
         "embedding": np.frombuffer(row[4]),
         "source_url": row[5]
     }
+
 
 def record_factory(_, row):
     return LLMCallRecord(
