@@ -6,10 +6,11 @@ def text_to_chunks(text, chunk_size, overlap):
 
     length = len(text)
     step = chunk_size - overlap
+    stop = max(length - overlap, 1)
 
     chunks = {}
 
-    for i in range(0, length - overlap, step):
+    for i in range(0, stop, step):
         chunk = text[i:i + chunk_size]
         chunks[i] = chunk
 
