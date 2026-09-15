@@ -1,12 +1,11 @@
 import logging
 from wikifin_rag.config import PROJECT_ROOT
 from pathlib import Path
-from datetime import date
 import json
 import sqlite3
 from wikifin_rag.embedder import Embedder
 from wikifin_rag.utils import chunk_document_batch
-from datetime import datetime
+from datetime import datetime, date
 from wikifin_rag.factories import record_factory, stats_factory
 
 
@@ -120,7 +119,7 @@ class DocumentsDBClient(DBClient):
 
 
                 # SPLIT DOCUMENTS INTO CHUNKS AND GENERATE EMBEDDINGS
-                chunked_batch = chunk_document_batch(batch, 300, 50)
+                chunked_batch = chunk_document_batch(batch, 1500, 300)
 
                 batch_texts = [f"Document: {chunk['title']}\nSection: {chunk['section']}\n\n{chunk['content']}" for chunk in chunked_batch]
                 embeddings = self.embedder.encode_batch(batch_texts)
