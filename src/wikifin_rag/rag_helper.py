@@ -26,13 +26,13 @@ class RAGBase:
 
     def __init__(
         self,
-        index,
+        search_function,
         llm_client,
         instructions=INSTRUCTIONS,
         prompt_template=PROMPT_TEMPLATE,
         model='gpt-5.4-mini'
     ):
-        self.index = index
+        self.search_function = search_function
         self.llm_client = llm_client
         self.instructions = instructions
         self.prompt_template = prompt_template
@@ -59,12 +59,6 @@ class RAGBase:
         )
     
         self.last_call = call_record
-
-    def search(self, query, num_results=5):
-        return self.index.search(
-            query,
-            num_results=num_results,
-        )
 
     def build_context(self, search_results):
         lines = []
@@ -100,7 +94,7 @@ class RAGBase:
         return response.output_text
 
     def rag(self, query):
-        search_results = self.search(query)
+        search_results = self.search_function(query)
         prompt = self.build_prompt(query, search_results)
         answer = self.llm(prompt)
         return answer

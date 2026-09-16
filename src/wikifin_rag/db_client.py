@@ -119,7 +119,7 @@ class DocumentsDBClient(DBClient):
 
 
                 # SPLIT DOCUMENTS INTO CHUNKS AND GENERATE EMBEDDINGS
-                chunked_batch = chunk_document_batch(batch, 1500, 300)
+                chunked_batch = chunk_document_batch(batch, 1200, 250)
 
                 batch_texts = [f"Document: {chunk['title']}\nSection: {chunk['section']}\n\n{chunk['content']}" for chunk in chunked_batch]
                 embeddings = self.embedder.encode_batch(batch_texts)

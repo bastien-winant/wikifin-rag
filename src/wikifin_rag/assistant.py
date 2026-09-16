@@ -1,20 +1,40 @@
 import sys
-
 from dotenv import load_dotenv
 from openai import OpenAI
-
-from wikifin_rag.ingest import load_wikifin_data, build_text_index, build_vector_index
+import pickle
+from wikifin_rag.config import PROJECT_ROOT
+from wikifin_rag.search_utils import load_text_index, load_vector_index, vector_search, text_search, rrf_hybrid_search
 from wikifin_rag.rag_helper import RAGBase
 from wikifin_rag.db_client import MonitoringDBClient
+from wikifin_rag.embedder import Embedder
+import pickle
+
+
+def search_function(query):
+    embedder = Embedder()
+
+    with open(PROJECT_ROOT / "data" / "evals" / "vs_index_params.pkl", "rb") as file:
+        vs_params = pickle.load(file)
+
+    vs_index = load_vector_index(**vs_params)
+    vs_results = vector_search(query=query, index=vs_index, embedder=embedder)
+
+
+    with open(PROJECT_ROOT / "data" / "evals" / "ts_index_params.pkl", "rb") as file:
+        ts_params = pickle.load(file)
+
+    ts_index = load_text_index()
+    ts_results = text_search(query=query, index=ts_index, boost_dict=ts_params)
+
+    return rrf_hybrid_search([vs_results, ts_results])
+
 
 def create_assistant():
     load_dotenv(override=True)
 
-    documents = load_wikifin_data()
-    index = build_text_index(documents)
 
     return RAGBase(
-        index=index,
+        search_function=search_function,
         llm_client=OpenAI(),
     )
 
