@@ -1,6 +1,8 @@
 import streamlit as st
 from wikifin_rag.assistant import create_assistant
 from wikifin_rag.db_client import MonitoringDBClient
+from wikifin_rag.judge import evaluate_relevance
+
 
 assistant = create_assistant()
 
@@ -20,6 +22,9 @@ if st.button("Ask"):
         record = assistant.last_call
         conversation_id = db_client.save_conversation(record, user_input)
         st.session_state.conversation_id = conversation_id
+
+        relevance, explanation = evaluate_relevance(user_input, answer)
+        db_client.save_feedback(conversation_id, "judge", relevance=relevance, explanation=explanation)
 
 conversation_id = st.session_state.get("conversation_id")
 
