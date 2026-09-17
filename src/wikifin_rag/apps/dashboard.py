@@ -6,7 +6,7 @@ from wikifin_rag.db_client import MonitoringDBClient
 st.title("Course Assistant Dashboard")
 
 db_client = MonitoringDBClient()
-stats =  db_client.get_stats()
+stats =  db_client.get_conversation_stats()
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Total conversations", stats.total)

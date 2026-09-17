@@ -281,7 +281,7 @@ class MonitoringDBClient(DBClient):
 
         return rows
 
-    def get_stats(self):
+    def get_conversation_stats(self):
         try:
             with self.get_db_connection() as con:
                 con.row_factory = stats_factory
@@ -293,6 +293,39 @@ class MonitoringDBClient(DBClient):
                         SUM(total_cost),
                         AVG(total_tokens)
                     FROM {self.conversations_table_identifier}
+                """)
+                row = cur.fetchone()
+        except Exception as e:
+            self.logger.error(f"Error retrieving the data: {e}")
+            raise
+
+        return row
+
+    def get_relevance_stats(self):
+        try:
+            with self.get_db_connection() as con:
+                cur = con.execute(f"""
+                    SELECT relevance, COUNT(*)
+                    FROM {self.feedback_table_identifier}
+                    WHERE source = 'judge'
+                    GROUP BY relevance
+                """)
+                rows = cur.fetchall()
+        except Exception as e:
+            self.logger.error(f"Error retrieving the data: {e}")
+            raise
+
+        return dict(rows)
+
+    def get_user_feedback_stats(self):
+        try:
+            with self.get_db_connection() as con:
+                cur = con.execute(f"""
+                    SELECT
+                        SUM(CASE WHEN score > 0 THEN 1 ELSE 0 END),
+                        SUM(CASE WHEN score < 0 THEN 1 ELSE 0 END)
+                    FROM {self.feedback_table_identifier}
+                    WHERE source = 'user'
                 """)
                 row = cur.fetchone()
         except Exception as e:
