@@ -32,7 +32,6 @@ def search_function(query):
 def create_assistant():
     load_dotenv(override=True)
 
-
     return RAGBase(
         search_function=search_function,
         llm_client=OpenAI(),

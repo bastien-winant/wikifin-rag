@@ -84,7 +84,7 @@ class DocumentsDBClient(DBClient):
                     );
                 """)
 
-                self.logger.info("The database tables have been created.")
+                self.logger.info("Database initialized")
         except Exception as e:
             self.logger.error(f"The tables could not be created: {e}")
             raise
@@ -150,6 +150,7 @@ class MonitoringDBClient(DBClient):
         super().__init__(db_path=db_path)
 
         self.conversations_table_identifier = "conversations"
+        self.feedback_table_identifier = "feedback"
 
     def init_db(self, drop=False):
         try:
@@ -177,6 +178,20 @@ class MonitoringDBClient(DBClient):
                         timestamp TEXT NOT NULL DEFAULT current_timestamp
                     );
                 """)
+
+                cur.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {self.feedback_table_identifier} (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        conversation_id INTEGER REFERENCES conversations(id),
+                        source TEXT NOT NULL,
+                        relevance TEXT,
+                        explanation TEXT,
+                        score INTEGER,
+                        timestamp TEXT NOT NULL DEFAULT current_timestamp
+                    )
+                """)
+
+                self.logger.info("Database initialized")
         except Exception as e:
             self.logger.error(f"The tables could not be created: {e}")
             raise
@@ -220,6 +235,27 @@ class MonitoringDBClient(DBClient):
             raise
 
         return conversation_id
+
+    def save_feedback(self, conversation_id, source, relevance=None, explanation=None, score=None):
+        timestamp = datetime.now(self.DB_TIMEZONE)
+
+        try:
+            with self.get_db_connection() as con:
+                cur = con.execute(
+                    """
+                    INSERT INTO feedback (
+                        conversation_id, source, relevance,
+                        explanation, score, timestamp
+                    ) VALUES (
+                        ?, ?, ?, ?, ?, ?
+                    )
+                    """,
+                    (conversation_id, source, relevance,
+                    explanation, score, timestamp),
+                )
+        except Exception as e:
+            self.logger.error(f"Error writing feedback data: {e}")
+            raise
 
     def get_conversations(self, limit=10):
         try:

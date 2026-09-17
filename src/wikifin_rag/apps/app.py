@@ -20,3 +20,18 @@ if st.button("Ask"):
         record = assistant.last_call
         conversation_id = db_client.save_conversation(record, user_input)
         st.session_state.conversation_id = conversation_id
+
+conversation_id = st.session_state.get("conversation_id")
+
+if conversation_id is not None:
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("+1", key=f"feedback_up_{conversation_id}"):
+            db_client.save_feedback(conversation_id, "user", score=1)
+            st.success("Thanks!")
+
+    with col2:
+        if st.button("-1", key=f"feedback_down_{conversation_id}"):
+            db_client.save_feedback(conversation_id, "user", score=-1)
+            st.success("Thanks for the feedback!")
