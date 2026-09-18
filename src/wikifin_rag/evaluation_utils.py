@@ -1,6 +1,7 @@
 import time
 from tqdm.auto import tqdm
 from concurrent.futures import ThreadPoolExecutor
+from functools import reduce
 
 
 def calculate_cost(usage):
@@ -19,12 +20,7 @@ def calculate_cost(usage):
 
 
 def calculate_total_cost(usages):
-    total_cost = 0.0
-
-    for usage in usages:
-        cost = calculate_cost(usage)
-        total_cost = total_cost + cost["total_cost"]
-
+    total_cost = reduce(lambda x, y: x + calculate_cost(y), usages, 0.0)
     return total_cost
 
 

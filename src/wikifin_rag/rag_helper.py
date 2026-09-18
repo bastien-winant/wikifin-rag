@@ -1,6 +1,6 @@
 import time
 from wikifin_rag.items import LLMCallRecord
-from wikifin_rag.evaluation_utils import calculate_cost
+from wikifin_rag.evaluation_utils import calculate_cost, calculate_total_cost
 
 INSTRUCTIONS = '''
 Your task is to answer questions about finance personal management
@@ -39,10 +39,16 @@ class RAGBase:
         self.prompt_template = prompt_template
         self.model = model
 
+        self.usages = []
         self.last_call: LLMCallRecord = None
+
+    def reset_usage(self):
+        self.usages = []
+        self.last_call = None
 
     def _log_response(self, prompt, response, response_time):
         usage = response.usage
+        self.usages.append(usage)
         cost = calculate_cost(usage)
 
         call_record = LLMCallRecord(
@@ -99,3 +105,6 @@ class RAGBase:
         prompt = self.build_prompt(query, search_results)
         answer = self.llm(prompt)
         return answer
+
+    def total_cost(self):
+        return calculate_total_cost(self.usages)
