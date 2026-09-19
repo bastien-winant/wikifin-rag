@@ -20,7 +20,7 @@ def calculate_cost(usage):
 
 
 def calculate_total_cost(usages):
-    total_cost = reduce(lambda x, y: x + calculate_cost(y), usages, 0.0)
+    total_cost = reduce(lambda x, y: x + calculate_cost(y)['total_cost'], usages, 0.0)
     return total_cost
 
 
