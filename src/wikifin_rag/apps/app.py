@@ -17,27 +17,37 @@ def response_generator():
         time.sleep(0.05)
 
 
-st.title("Simple chat")
+def save_feedback(index):
+    st.session_state.history[index]["feedback"] = st.session_state[f"feedback_{index}"]
 
-# Initialize chat history
-if "messages" not in st.session_state:
-    st.session_state.messages = []
 
-# Display chat messages from history on app rerun
-for message in st.session_state.messages:
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+for i, message in enumerate(st.session_state.history):
     with st.chat_message(message["role"]):
-        st.markdown(message["content"])
+        st.write(message["content"])
+        if message["role"] == "assistant":
+            feedback = message.get("feedback", None)
+            st.session_state[f"feedback_{i}"] = feedback
+            st.feedback(
+                "thumbs",
+                key=f"feedback_{i}",
+                disabled=feedback is not None,
+                on_change=save_feedback,
+                args=[i],
+            )
 
-# Accept user input
-if prompt := st.chat_input("What is up?"):
-    # Add user message to chat history
-    st.session_state.messages.append({"role": "user", "content": prompt})
-    # Display user message in chat message container
+if prompt := st.chat_input("Say something"):
     with st.chat_message("user"):
-        st.markdown(prompt)
-
-    # Display assistant response in chat message container
+        st.write(prompt)
+    st.session_state.history.append({"role": "user", "content": prompt})
     with st.chat_message("assistant"):
         response = st.write_stream(response_generator())
-    # Add assistant response to chat history
-    st.session_state.messages.append({"role": "assistant", "content": response})
+        st.feedback(
+            "thumbs",
+            key=f"feedback_{len(st.session_state.history)}",
+            on_change=save_feedback,
+            args=[len(st.session_state.history)],
+        )
+    st.session_state.history.append({"role": "assistant", "content": response})
