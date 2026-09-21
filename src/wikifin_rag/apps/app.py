@@ -8,12 +8,7 @@ from wikifin_rag.judge import evaluate_relevance
 assistant = create_assistant()
 
 db_client = MonitoringDBClient()
-db_client.init_db(drop=False)
-
-
-def chat_stream(prompt):
-    response = assistant.rag(prompt)
-    return response
+db_client.init_db()
 
 
 def save_feedback(index, conversation_id):
