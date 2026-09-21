@@ -16,7 +16,8 @@ def chat_stream(prompt):
     return response
 
 
-def save_feedback(conversation_id):
+def save_feedback(index, conversation_id):
+    st.session_state.history[index]["feedback"] = st.session_state[f"feedback_{conversation_id}"]
     db_client.save_feedback(conversation_id, "user", score=st.session_state[f"feedback_{conversation_id}"])
 
 
@@ -26,7 +27,7 @@ if "history" not in st.session_state:
 
 st.title("Ask Wik:blue[i]f:green[i]n")
 
-for message in st.session_state.history:
+for i, message in enumerate(st.session_state.history):
     with st.chat_message(message["role"]):
         st.write(message["content"])
         if message["role"] == "assistant":
@@ -38,7 +39,7 @@ for message in st.session_state.history:
                 key=f"feedback_{conversation_id}",
                 disabled=feedback is not None,
                 on_change=save_feedback,
-                args=[conversation_id],
+                args=[i, conversation_id],
             )
 
 if prompt := st.chat_input("Say something"):
@@ -63,6 +64,6 @@ if prompt := st.chat_input("Say something"):
                 "thumbs",
                 key=f"feedback_{conversation_id}",
                 on_change=save_feedback,
-                args=[conversation_id],
+                args=[len(st.session_state.history), conversation_id],
             )
     st.session_state.history.append({"role": "assistant", "content": response, "id": conversation_id})
