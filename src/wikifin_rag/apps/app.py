@@ -23,6 +23,9 @@ def save_feedback(index):
 if "history" not in st.session_state:
     st.session_state.history = []
 
+
+st.title("Ask Wik:blue[i]f:green[i]n")
+
 for i, message in enumerate(st.session_state.history):
     with st.chat_message(message["role"]):
         st.write(message["content"])
@@ -43,9 +46,8 @@ if prompt := st.chat_input("Say something"):
     st.session_state.history.append({"role": "user", "content": prompt})
 
     with st.chat_message("assistant"):
-        with st.spinner("Processing..."):
+        with st.spinner("..."):
             response = assistant.rag(prompt)
-            st.write(response)
 
             record = assistant.last_call
             conversation_id = db_client.save_conversation(record, prompt)
@@ -54,6 +56,7 @@ if prompt := st.chat_input("Say something"):
             relevance, explanation = evaluate_relevance(prompt, response)
             db_client.save_feedback(conversation_id, "judge", relevance=relevance, explanation=explanation)
 
+            st.write(response)
 
             st.feedback(
                 "thumbs",

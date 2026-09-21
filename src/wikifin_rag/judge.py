@@ -35,12 +35,14 @@ def evaluate_relevance(question, answer, client=None):
         answer=answer
     )
 
-    result, usage = llm_structured_retry(
+    result, _ = llm_structured_retry(
         client,
         judge_instructions,
         prompt,
         RelevanceVerdict,
     )
+
+    client.close()
 
     return result.relevance, result.explanation
 
