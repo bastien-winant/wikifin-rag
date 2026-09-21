@@ -159,6 +159,7 @@ class MonitoringDBClient(DBClient):
 
                 if drop:
                     cur.execute(f"DROP TABLE IF EXISTS {self.conversations_table_identifier};")
+                    cur.execute(f"DROP TABLE IF EXISTS {self.feedback_table_identifier};")
 
                 cur.execute(f"""
                     CREATE TABLE IF NOT EXISTS {self.conversations_table_identifier} (
@@ -241,7 +242,7 @@ class MonitoringDBClient(DBClient):
 
         try:
             with self.get_db_connection() as con:
-                cur = con.execute(
+                con.execute(
                     """
                     INSERT INTO feedback (
                         conversation_id, source, relevance,

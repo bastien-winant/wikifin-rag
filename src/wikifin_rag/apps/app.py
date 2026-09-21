@@ -1,20 +1,19 @@
 import streamlit as st
-import random
 import time
+from wikifin_rag.assistant import create_assistant
+from wikifin_rag.db_client import MonitoringDBClient
+from wikifin_rag.judge import evaluate_relevance
 
 
-# Streamed response emulator
-def response_generator():
-    response = random.choice(
-        [
-            "Hello there! How can I assist you today?",
-            "Hi, human! Is there anything I can help you with?",
-            "Do you need help?",
-        ]
-    )
-    for word in response.split():
-        yield word + " "
-        time.sleep(0.05)
+assistant = create_assistant()
+
+db_client = MonitoringDBClient()
+db_client.init_db(drop=False)
+
+
+def chat_stream(prompt):
+    response = assistant.rag(prompt)
+    return response
 
 
 def save_feedback(index):
@@ -42,12 +41,24 @@ if prompt := st.chat_input("Say something"):
     with st.chat_message("user"):
         st.write(prompt)
     st.session_state.history.append({"role": "user", "content": prompt})
+
     with st.chat_message("assistant"):
-        response = st.write_stream(response_generator())
-        st.feedback(
-            "thumbs",
-            key=f"feedback_{len(st.session_state.history)}",
-            on_change=save_feedback,
-            args=[len(st.session_state.history)],
-        )
+        with st.spinner("Processing..."):
+            response = assistant.rag(prompt)
+            st.write(response)
+
+            record = assistant.last_call
+            conversation_id = db_client.save_conversation(record, prompt)
+            st.session_state.conversation_id = conversation_id
+
+            relevance, explanation = evaluate_relevance(prompt, response)
+            db_client.save_feedback(conversation_id, "judge", relevance=relevance, explanation=explanation)
+
+
+            st.feedback(
+                "thumbs",
+                key=f"feedback_{len(st.session_state.history)}",
+                on_change=save_feedback,
+                args=[len(st.session_state.history)],
+            )
     st.session_state.history.append({"role": "assistant", "content": response})
