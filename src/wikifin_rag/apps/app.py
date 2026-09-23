@@ -22,43 +22,47 @@ if "history" not in st.session_state:
 
 st.title("Ask Wik:blue[i]f:green[i]n")
 
-for i, message in enumerate(st.session_state.history):
-    with st.chat_message(message["role"]):
-        st.write(message["content"])
-        if message["role"] == "assistant":
-            conversation_id = message["id"]
-            feedback = message.get("feedback", None)
-            st.session_state[f"feedback_{conversation_id}"] = feedback
-            st.feedback(
-                "thumbs",
-                key=f"feedback_{conversation_id}",
-                disabled=feedback is not None,
-                on_change=save_feedback,
-                args=[i, conversation_id],
-            )
+
+messages = st.container(height=200)
+
+# for i, message in enumerate(st.session_state.history):
+#     with st.chat_message(message["role"]):
+#         st.write(message["content"])
+#         if message["role"] == "assistant":
+#             conversation_id = message["id"]
+#             feedback = message.get("feedback", None)
+#             st.session_state[f"feedback_{conversation_id}"] = feedback
+#             st.feedback(
+#                 "thumbs",
+#                 key=f"feedback_{conversation_id}",
+#                 disabled=feedback is not None,
+#                 on_change=save_feedback,
+#                 args=[i, conversation_id],
+#             )
 
 if prompt := st.chat_input("Say something"):
-    with st.chat_message("user"):
-        st.write(prompt)
+    messages.chat_message("user").write(prompt)
     st.session_state.history.append({"role": "user", "content": prompt})
 
-    with st.chat_message("assistant"):
-        with st.spinner("..."):
-            response = assistant.rag(prompt)
+    with st.spinner():
+        response = assistant.rag(prompt)
 
-            record = assistant.last_call
-            conversation_id = db_client.save_conversation(record, prompt)
-            st.session_state.conversation_id = conversation_id
+        record = assistant.last_call
+        conversation_id = db_client.save_conversation(record, prompt)
+        st.session_state.conversation_id = conversation_id
 
-            relevance, explanation = evaluate_relevance(prompt, response)
-            db_client.save_feedback(conversation_id, "judge", relevance=relevance, explanation=explanation)
+        # generate and save LLM-as-judge feedback
+        relevance, explanation = evaluate_relevance(prompt, response)
+        db_client.save_feedback(conversation_id, "judge", relevance=relevance, explanation=explanation)
 
-            st.write(response)
+        # write assistant response to the chat
+        messages.chat_message("assistant").write(response)
 
-            st.feedback(
-                "thumbs",
-                key=f"feedback_{conversation_id}",
-                on_change=save_feedback,
-                args=[len(st.session_state.history), conversation_id],
-            )
+        # listen for user feedback
+        st.feedback(
+            "thumbs",
+            key=f"feedback_{conversation_id}",
+            on_change=save_feedback,
+            args=[len(st.session_state.history), conversation_id],
+        )
     st.session_state.history.append({"role": "assistant", "content": response, "id": conversation_id})
