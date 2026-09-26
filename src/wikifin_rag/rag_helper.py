@@ -85,13 +85,19 @@ class RAGBase:
             question=query, context=context
         )
 
-    def llm(self, prompt):
+    def llm(self, prompt, history=None):
         start_time = time.time()
-        
+
+        history = [] if history is None else history
+        history.append({
+            "role": "user",
+            "content": prompt
+        })
+
         response = self.llm_client.responses.create(
             model=self.model,
             instructions=self.instructions,
-            input=prompt,
+            input=history,
             temperature=0.0
         )
 
@@ -100,10 +106,10 @@ class RAGBase:
 
         return response.output_text
 
-    def rag(self, query):
+    def rag(self, query, history=None):
         search_results = self.search_function(query)
         prompt = self.build_prompt(query, search_results)
-        answer = self.llm(prompt)
+        answer = self.llm(prompt=prompt, history=history)
         return answer
 
     def total_cost(self):

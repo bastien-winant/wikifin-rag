@@ -1,5 +1,4 @@
 import streamlit as st
-import time
 from wikifin_rag.assistant import create_assistant
 from wikifin_rag.db_client import MonitoringDBClient
 from wikifin_rag.judge import evaluate_relevance
@@ -37,13 +36,12 @@ for i, message in enumerate(st.session_state.history):
                 args=[i],
             )
 
-if prompt := st.chat_input("Say something"):
+if prompt := st.chat_input("Say something", height=50):
     st.chat_message("user").write(prompt)
-    st.session_state.history.append({"role": "user", "content": prompt})
     
     with st.chat_message("assistant"):
         with st.spinner():
-            response = assistant.rag(prompt)
+            response = assistant.rag(prompt, history=st.session_state.history)
 
             # save LLM response trace
             record = assistant.last_call
@@ -66,4 +64,5 @@ if prompt := st.chat_input("Say something"):
                 on_change=save_feedback,
                 args=[len(st.session_state.history)],
             )
+    st.session_state.history.append({"role": "user", "content": prompt})
     st.session_state.history.append({"role": "assistant", "content": response})
