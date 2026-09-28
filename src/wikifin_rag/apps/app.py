@@ -1,5 +1,11 @@
 import streamlit as st
 
+if "history" not in st.session_state:
+    st.session_state.history = {}
+
+if "feedback" not in st.session_state:
+    st.session_state.feedback = {}
+
 pg = st.navigation(
     pages=[
         st.Page(
@@ -18,6 +24,6 @@ pg = st.navigation(
             url_path="nl"
         ),
     ],
-    position='top'
+    # position='top'
 )
 pg.run()

@@ -16,12 +16,6 @@ def save_feedback(conversation_id):
         score=st.session_state[f"feedback_{conversation_id}"]
     )
 
-if "history" not in st.session_state:
-    st.session_state.history = {}
-
-if "feedback" not in st.session_state:
-    st.session_state.feedback = {}
-
 with st.sidebar:
     st.title("Demandez à Wikifin")
     st.text("Des réponses claires à vos questions d'argent.")
@@ -46,6 +40,7 @@ for conversation_id, messages in st.session_state.history.items():
                     on_change=save_feedback,
                     args=[conversation_id],
                 )
+
 
 if prompt := st.chat_input("Tapez votre question ici"):
     st.chat_message("user").write(prompt)

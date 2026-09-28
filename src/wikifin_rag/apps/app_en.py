@@ -15,12 +15,7 @@ def save_feedback(conversation_id):
         source="user",
         score=st.session_state[f"feedback_{conversation_id}"]
     )
-
-if "history" not in st.session_state:
-    st.session_state.history = {}
-
-if "feedback" not in st.session_state:
-    st.session_state.feedback = {}
+    
 
 with st.sidebar:
     st.title("Ask Wikifin")
