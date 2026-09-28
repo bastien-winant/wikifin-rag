@@ -2,7 +2,7 @@ import streamlit as st
 from wikifin_rag.assistant import create_assistant
 from wikifin_rag.db_client import MonitoringDBClient
 from wikifin_rag.judge import evaluate_relevance
-import time
+from functools import reduce
 
 db_client = MonitoringDBClient()
 assistant = create_assistant()
@@ -23,7 +23,16 @@ if "feedback" not in st.session_state:
     st.session_state.feedback = {}
 
 with st.sidebar:
-    st.title("Ask Wik:blue[i]f:green[i]n")
+    st.title("Ask Wikifin")
+    st.caption("Clear answers to your money questions.")
+    st.write(
+        """This AI assistant uses information from [wikifin.be](https://www.wikifin.be) to
+        answer your questions about finance, taxes, or savings in Belgium."""
+    )
+
+
+with st.chat_message("assistant"):
+    st.write("What is your question?")
 
 for conversation_id, messages in st.session_state.history.items():
     for message in messages:
@@ -41,12 +50,13 @@ for conversation_id, messages in st.session_state.history.items():
                     args=[conversation_id],
                 )
 
-if prompt := st.chat_input("Say something"):
+if prompt := st.chat_input("Type in your question"):
     st.chat_message("user").write(prompt)
 
     with st.chat_message("assistant"):
         with st.spinner():
-            response = assistant.rag(prompt)
+            messages = reduce(lambda x, y: x + y, st.session_state.history.values(), [])
+            response = assistant.rag(prompt, history=messages)
 
             # save LLM response trace
             record = assistant.last_call
