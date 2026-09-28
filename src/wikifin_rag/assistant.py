@@ -1,5 +1,5 @@
 import sys
-from dotenv import load_dotenv
+import streamlit as st
 from openai import OpenAI
 import pickle
 from wikifin_rag.config import PROJECT_ROOT
@@ -35,11 +35,9 @@ def hs_function(query):
 
 
 def create_assistant():
-    load_dotenv(override=True)
-
     return RAGBase(
         search_function=vs_function,
-        llm_client=OpenAI(),
+        llm_client=OpenAI(api_key=st.secrets["OPENAI_API_KEY"]),
     )
 
 
