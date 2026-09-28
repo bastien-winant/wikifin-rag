@@ -23,14 +23,11 @@ if "feedback" not in st.session_state:
     st.session_state.feedback = {}
 
 with st.sidebar:
-    st.page_link("app_en.py", label="English", disabled=True)
-    st.page_link("app_nl.py", label="Nederlands")
-    st.page_link("app_fr.py", label="Français")
     st.title("Ask Wikifin")
-    st.caption("Clear answers to your money questions.")
-    st.write(
-        """This AI assistant uses information from [wikifin.be](https://www.wikifin.be) to
-        answer your questions about finance, taxes, or savings in Belgium."""
+    st.text("Clear answers to your money questions.")
+    st.caption(
+        """*This AI assistant uses information from [wikifin.be](https://www.wikifin.be) to
+        answer your questions about finance, taxes, or savings in Belgium.*"""
     )
 
 

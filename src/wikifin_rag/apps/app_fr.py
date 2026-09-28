@@ -23,14 +23,11 @@ if "feedback" not in st.session_state:
     st.session_state.feedback = {}
 
 with st.sidebar:
-    st.page_link("app_en.py", label="English")
-    st.page_link("app_nl.py", label="Nederlands")
-    st.page_link("app_fr.py", label="Français", disabled=True)
     st.title("Demandez à Wikifin")
-    st.caption("Des réponses claires à vos questions d'argent.")
-    st.write(
-        """Cet assistant IA utilise les informations de [wikifin.be](https://www.wikifin.be) pour
-        répondre à vos questions sur la finance, les impôts ou l'épargne en Belgique."""
+    st.text("Des réponses claires à vos questions d'argent.")
+    st.caption(
+        """*Cet assistant IA utilise les informations de [wikifin.be](https://www.wikifin.be) pour
+        répondre à vos questions sur la finance, les impôts ou l'épargne en Belgique.*"""
     )
 
 
