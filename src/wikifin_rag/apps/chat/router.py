@@ -1,5 +1,7 @@
 import streamlit as st
 
+st.session_state.MAX_INPUT_LEN = 6000
+
 if "history" not in st.session_state:
     st.session_state.history = {}
 

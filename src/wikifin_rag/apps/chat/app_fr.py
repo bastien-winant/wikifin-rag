@@ -43,6 +43,10 @@ for conversation_id, messages in st.session_state.history.items():
 
 
 if prompt := st.chat_input("Tapez votre question ici"):
+    if len(prompt) > st.session_state.MAX_INPUT_LEN:
+            st.error("That message is too long.")
+            st.stop()
+    
     st.chat_message("user").write(prompt)
 
     with st.chat_message("assistant"):

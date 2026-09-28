@@ -98,7 +98,8 @@ class RAGBase:
             model=self.model,
             instructions=self.instructions,
             input=history,
-            temperature=0.0
+            temperature=0.0,
+            max_output_tokens=750
         )
 
         response_time = time.time() - start_time
