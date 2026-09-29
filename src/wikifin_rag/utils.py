@@ -1,3 +1,5 @@
+import tiktoken
+
 def text_to_chunks(text, chunk_size, overlap):
     if chunk_size <= 0:
         raise ValueError("chunk_size must be > 0")
@@ -34,3 +36,12 @@ def chunk_document_batch(batch, chunk_size, overlap):
             })
 
     return chunked_batch
+
+
+def num_tokens_from_message(message, model="gpt-5.4-mini"):
+    try:
+        encoding = tiktoken.encoding_for_model(model)
+    except KeyError:
+        encoding = tiktoken.get_encoding("o200k_base")
+    
+    return len(encoding.encode(message))

@@ -3,6 +3,7 @@ from wikifin_rag.assistant import create_assistant
 from wikifin_rag.db_client import MonitoringDBClient
 from wikifin_rag.judge import evaluate_relevance
 from functools import reduce
+from wikifin_rag.utils import num_tokens_from_message
 
 db_client = MonitoringDBClient()
 assistant = create_assistant()
@@ -43,9 +44,11 @@ for conversation_id, messages in st.session_state.history.items():
 
 
 if prompt := st.chat_input("Tapez votre question ici"):
-    if len(prompt) > st.session_state.MAX_INPUT_LEN:
-            st.error("That message is too long.")
-            st.stop()
+    num_prompt_tokens = num_tokens_from_message(prompt)
+
+    if num_prompt_tokens > st.session_state.MAX_INPUT_TOKENS:
+        st.error("That message is too long.")
+        st.stop()
     
     st.chat_message("user").write(prompt)
 
