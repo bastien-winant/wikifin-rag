@@ -1,26 +1,5 @@
 import streamlit as st
-from wikifin_rag.assistant import create_assistant
-from wikifin_rag.db_client import MonitoringDBClient
-from wikifin_rag.judge import evaluate_relevance
-from functools import reduce
-from wikifin_rag.utils import num_tokens_from_message
-
-db_client = MonitoringDBClient()
-assistant = create_assistant()
-
-def reset_session_state():
-    st.session_state.history = {}
-    st.session_state.feedback = {}
-    st.session_state.conversation_id = None
-
-
-def save_feedback(exchange_id):
-    st.session_state.feedback[exchange_id] = st.session_state[f"feedback_{exchange_id}"]
-    db_client.save_feedback(
-        exchange_id=exchange_id,
-        source="user",
-        score=st.session_state[f"feedback_{exchange_id}"]
-    )
+from wikifin_rag.apps.chat.utils import reset_session_state, display_conversation_history, generate_prompt_response
 
 with st.sidebar:
     st.title("Ask Wikifin")
@@ -31,70 +10,13 @@ with st.sidebar:
     )
 
 
-for exchange_id, messages in st.session_state.history.items():
-    for message in messages:
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
-
-            if message["role"] == "assistant":
-                feedback = st.session_state.feedback.get(exchange_id, None)
-                st.session_state[f"feedback_{exchange_id}"] = feedback
-                st.feedback(
-                    "thumbs",
-                    key=f"feedback_{exchange_id}",
-                    disabled=feedback is not None,
-                    on_change=save_feedback,
-                    args=[exchange_id],
-                )
+display_conversation_history()
 
 with st.bottom:
     col1, col2 = st.columns([6, 1])
 
 if prompt := col1.chat_input("Type in your question"):
-    num_prompt_tokens = num_tokens_from_message(prompt)
-
-    if num_prompt_tokens > st.session_state.MAX_INPUT_TOKENS:
-        st.error("That message is too long.")
-        st.stop()
-            
-    st.chat_message("user").write(prompt)
-
-    with st.chat_message("assistant"):
-        with st.spinner():
-            messages = reduce(lambda x, y: x + y, st.session_state.history.values(), [])
-            response = assistant.rag(prompt, history=messages)
-
-            # save LLM response trace
-            record = assistant.last_call
-
-            if not st.session_state.conversation_id:
-                conversation_id = db_client.save_conversation(record)
-                st.session_state.conversation_id = conversation_id
-            
-            exchange_id = db_client.save_exchange(st.session_state.conversation_id, record, prompt)
-            st.session_state.exchange_id = exchange_id
-
-            # LLM-as-a-judge
-            relevance, explanation = evaluate_relevance(prompt, response)
-            db_client.save_feedback(
-                exchange_id=exchange_id,
-                source="judge",
-                relevance=relevance,
-                explanation=explanation
-            )
-
-            st.write(response)
-            st.feedback(
-                "thumbs",
-                key=f"feedback_{exchange_id}",
-                on_change=save_feedback,
-                args=[exchange_id],
-            )
-    
-    st.session_state.history[exchange_id] = [
-        {"role": "user", "content": prompt},
-        {"role": "assistant", "content": response}
-    ]
+    generate_prompt_response(prompt=prompt)
 
 
 col2.button(
