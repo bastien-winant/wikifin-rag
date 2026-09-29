@@ -324,7 +324,7 @@ class MonitoringDBClient(DBClient):
                 cur = con.execute(f"""
                     SELECT
                         SUM(CASE WHEN score > 0 THEN 1 ELSE 0 END),
-                        SUM(CASE WHEN score < 0 THEN 1 ELSE 0 END)
+                        SUM(CASE WHEN score = 0 THEN 1 ELSE 0 END)
                     FROM {self.feedback_table_identifier}
                     WHERE source = 'user'
                 """)
