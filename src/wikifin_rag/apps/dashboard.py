@@ -6,7 +6,7 @@ from wikifin_rag.db_client import MonitoringDBClient
 st.title("Course Assistant Dashboard")
 
 db_client = MonitoringDBClient()
-stats =  db_client.get_conversation_stats()
+stats =  db_client.get_exchange_stats()
 
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Total conversations", stats.total)
@@ -14,7 +14,7 @@ col2.metric("Avg response time", f"{stats.avg_response_time:.2f}s")
 col3.metric("Total cost", f"${stats.total_cost:.4f}")
 col4.metric("Avg tokens", f"{stats.avg_tokens:.0f}")
 
-records = db_client.get_conversations(limit=100)
+records = db_client.get_exchanges(limit=100)
 df = pd.DataFrame([asdict(r) for r in records])
 
 st.subheader("Cost over time")
@@ -24,7 +24,7 @@ st.subheader("Response time over time")
 st.line_chart(df, x="timestamp", y="response_time")
 
 st.subheader("Recent conversations")
-records = db_client.get_conversations(limit=20)
+records = db_client.get_exchanges(limit=20)
 
 for record in records:
     st.write(f"**{record.prompt[:80]}...**")

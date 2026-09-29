@@ -14,21 +14,21 @@ if "conversation_id" not in st.session_state:
 pg = st.navigation(
     pages=[
         st.Page(
-            "app_en.py",
+            "pages/en.py",
             title="🇬🇧 EN",
             url_path="en"
         ),
         st.Page(
-            "app_fr.py",
+            "pages/fr.py",
             title="🇫🇷 FR",
             url_path="fr"
         ),
         st.Page(
-            "app_nl.py",
+            "pages/nl.py",
             title="🇳🇱 NL",
             url_path="nl"
         ),
     ],
-    # position='top'
 )
+st.set_page_config(page_title="Wikifin AI")
 pg.run()

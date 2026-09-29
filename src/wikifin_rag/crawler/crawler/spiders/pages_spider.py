@@ -1,5 +1,4 @@
 import scrapy
-import logging
 from wikifin_rag.crawler.crawler.items import Batch
 from trafilatura import extract_metadata
 from bs4 import BeautifulSoup
