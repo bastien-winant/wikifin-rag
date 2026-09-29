@@ -199,7 +199,7 @@ class MonitoringDBClient(DBClient):
                         explanation TEXT,
                         score INTEGER,
                         timestamp TEXT NOT NULL DEFAULT current_timestamp
-                    )
+                    );
                 """)
 
                 self.logger.info("Database initialized")
@@ -276,13 +276,13 @@ class MonitoringDBClient(DBClient):
         try:
             with self.get_db_connection() as con:
                 con.execute(
-                    """
-                    INSERT INTO feedback (
+                    f"""
+                    INSERT INTO {self.feedback_table_identifier} (
                         exchange_id, source, relevance,
                         explanation, score, timestamp
                     ) VALUES (
                         ?, ?, ?, ?, ?, ?
-                    )
+                    );
                     """,
                     (exchange_id, source, relevance,
                     explanation, score, timestamp),
@@ -306,7 +306,7 @@ class MonitoringDBClient(DBClient):
                     JOIN {self.conversations_table_identifier} c
                     ON c.id = e.conversation_id
                     ORDER BY e.timestamp DESC
-                    LIMIT ?
+                    LIMIT ?;
                     """,
                     (limit,),
                 )
@@ -317,6 +317,30 @@ class MonitoringDBClient(DBClient):
 
         return rows
 
+    
+    def get_conversation_stats(self):
+        try:
+            with self.get_db_connection() as con:
+                cur = con.execute(f"""
+                    SELECT
+                        c.id,
+                        c.started_at,
+                        COUNT(e.id) AS total_exchanges,
+                        SUM(e.total_cost) AS total_cost,
+                        SUM(e.total_tokens) AS total_tokens
+                    FROM {self.conversations_table_identifier} c
+                    JOIN {self.exchanges_table_identifier} e
+                    ON c.id = e.conversation_id
+                    GROUP BY 1, 2;
+                """)
+                rows = cur.fetchall()
+        except Exception as e:
+            self.logger.error(f"Error retrieving the data: {e}")
+            raise
+
+        return dict(rows)
+
+    
     def get_exchange_stats(self):
         try:
             with self.get_db_connection() as con:
@@ -328,7 +352,7 @@ class MonitoringDBClient(DBClient):
                         AVG(response_time),
                         SUM(total_cost),
                         AVG(total_tokens)
-                    FROM {self.exchanges_table_identifier}
+                    FROM {self.exchanges_table_identifier};
                 """)
                 row = cur.fetchone()
         except Exception as e:
@@ -344,7 +368,7 @@ class MonitoringDBClient(DBClient):
                     SELECT relevance, COUNT(*)
                     FROM {self.feedback_table_identifier}
                     WHERE source = 'judge'
-                    GROUP BY relevance
+                    GROUP BY relevance;
                 """)
                 rows = cur.fetchall()
         except Exception as e:
@@ -361,7 +385,7 @@ class MonitoringDBClient(DBClient):
                         SUM(CASE WHEN score > 0 THEN 1 ELSE 0 END),
                         SUM(CASE WHEN score = 0 THEN 1 ELSE 0 END)
                     FROM {self.feedback_table_identifier}
-                    WHERE source = 'user'
+                    WHERE source = 'user';
                 """)
                 row = cur.fetchone()
         except Exception as e:
