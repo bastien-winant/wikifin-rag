@@ -8,6 +8,9 @@ if "history" not in st.session_state:
 if "feedback" not in st.session_state:
     st.session_state.feedback = {}
 
+if "conversation_id" not in st.session_state:
+    st.session_state.conversation_id = None
+
 pg = st.navigation(
     pages=[
         st.Page(

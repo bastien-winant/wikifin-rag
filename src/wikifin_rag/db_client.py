@@ -150,6 +150,7 @@ class MonitoringDBClient(DBClient):
         super().__init__(db_path=db_path)
 
         self.conversations_table_identifier = "conversations"
+        self.exchanges_table_identifier = "exchanges"
         self.feedback_table_identifier = "feedback"
 
     def init_db(self, drop=False):
@@ -159,15 +160,24 @@ class MonitoringDBClient(DBClient):
 
                 if drop:
                     cur.execute(f"DROP TABLE IF EXISTS {self.conversations_table_identifier};")
+                    cur.execute(f"DROP TABLE IF EXISTS {self.exchanges_table_identifier};")
                     cur.execute(f"DROP TABLE IF EXISTS {self.feedback_table_identifier};")
 
                 cur.execute(f"""
                     CREATE TABLE IF NOT EXISTS {self.conversations_table_identifier} (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        query TEXT NOT NULL,
-                        answer TEXT NOT NULL,
                         model TEXT NOT NULL,
                         instructions TEXT NOT NULL,
+                        started_at TEXT NOT NULL DEFAULT current_timestamp
+                    );
+                """)
+
+                cur.execute(f"""
+                    CREATE TABLE IF NOT EXISTS {self.exchanges_table_identifier} (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        conversation_id INTEGER REFERENCES {self.conversations_table_identifier}(id),
+                        query TEXT NOT NULL,
+                        answer TEXT NOT NULL,
                         prompt TEXT NOT NULL,
                         prompt_tokens INTEGER NOT NULL,
                         completion_tokens INTEGER NOT NULL,
@@ -183,7 +193,7 @@ class MonitoringDBClient(DBClient):
                 cur.execute(f"""
                     CREATE TABLE IF NOT EXISTS {self.feedback_table_identifier} (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        conversation_id INTEGER REFERENCES conversations(id),
+                        exchange_id INTEGER REFERENCES {self.exchanges_table_identifier}(id),
                         source TEXT NOT NULL,
                         relevance TEXT,
                         explanation TEXT,
@@ -197,26 +207,49 @@ class MonitoringDBClient(DBClient):
             self.logger.error(f"The tables could not be created: {e}")
             raise
 
-    def save_conversation(self, record, query):
+
+    def save_conversation(self, record):
+        try:
+            timestamp = datetime.now(self.DB_TIMEZONE).strftime(format='%Y-%m-%d %H:%M:%S.%f')
+            
+            with self.get_db_connection() as con:
+                cur = con.execute(f"""
+                    INSERT INTO {self.conversations_table_identifier} (model, instructions, started_at)
+                    VALUES (?, ?, ?)
+                    RETURNING id;
+                    """,
+                    (record.model, record.instructions, timestamp)
+                )
+                conversation_id = cur.fetchone()[0]
+
+                self.logger.info(f"Inserted new LLM conversation record.")
+        except Exception as e:
+            self.logger.error(f"Error writing conversation data: {e}")
+            raise
+
+        return conversation_id
+        
+
+    
+    def save_exchange(self, conversation_id, record, query):
         try:
             timestamp = datetime.now(self.DB_TIMEZONE).strftime(format='%Y-%m-%d %H:%M:%S.%f')
 
             with self.get_db_connection() as con:
                 cur = con.execute(f"""
-                    INSERT INTO {self.conversations_table_identifier} (
-                        query, answer, model, instructions, prompt,
+                    INSERT INTO {self.exchanges_table_identifier} (
+                        conversation_id, query, answer, prompt,
                         prompt_tokens, completion_tokens, total_tokens,
                         response_time, input_cost, output_cost, total_cost, timestamp
                     ) VALUES (
-                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                     )
                     RETURNING id;
                     """,
                     (
+                        conversation_id,
                         query,
                         record.answer,
-                        record.model,
-                        record.instructions,
                         record.prompt,
                         record.prompt_tokens,
                         record.completion_tokens,
@@ -228,16 +261,16 @@ class MonitoringDBClient(DBClient):
                         timestamp,
                     ),
                 )
-                conversation_id = cur.fetchone()[0]
+                exchange_id = cur.fetchone()[0]
 
-                self.logger.info(f"Inserted new LLM conversation record.")
+                self.logger.info(f"Inserted new LLM exchange record.")
         except Exception as e:
-            self.logger.error(f"Error writing conversation data: {e}")
+            self.logger.error(f"Error writing exchange data: {e}")
             raise
 
-        return conversation_id
+        return exchange_id
 
-    def save_feedback(self, conversation_id, source, relevance=None, explanation=None, score=None):
+    def save_feedback(self, exchange_id, source, relevance=None, explanation=None, score=None):
         timestamp = datetime.now(self.DB_TIMEZONE)
 
         try:
@@ -245,32 +278,34 @@ class MonitoringDBClient(DBClient):
                 con.execute(
                     """
                     INSERT INTO feedback (
-                        conversation_id, source, relevance,
+                        exchange_id, source, relevance,
                         explanation, score, timestamp
                     ) VALUES (
                         ?, ?, ?, ?, ?, ?
                     )
                     """,
-                    (conversation_id, source, relevance,
+                    (exchange_id, source, relevance,
                     explanation, score, timestamp),
                 )
         except Exception as e:
             self.logger.error(f"Error writing feedback data: {e}")
             raise
 
-    def get_conversations(self, limit=10):
+    def get_exchanges(self, limit=10):
         try:
             with self.get_db_connection() as con:
                 con.row_factory = record_factory
 
                 cur = con.execute(
-                    """
-                    SELECT id, query, answer, model,
-                        instructions, prompt,
-                        prompt_tokens, completion_tokens, total_tokens,
-                        response_time, input_cost, output_cost, total_cost, timestamp
-                    FROM conversations
-                    ORDER BY timestamp DESC
+                    f"""
+                    SELECT e.id, e.query, e.answer, c.model,
+                        c.instructions, e.prompt,
+                        e.prompt_tokens, e.completion_tokens, e.total_tokens,
+                        e.response_time, e.input_cost, e.output_cost, e.total_cost, e.timestamp
+                    FROM {self.exchanges_table_identifier} e
+                    JOIN {self.conversations_table_identifier} c
+                    ON c.id = e.conversation_id
+                    ORDER BY e.timestamp DESC
                     LIMIT ?
                     """,
                     (limit,),
@@ -282,7 +317,7 @@ class MonitoringDBClient(DBClient):
 
         return rows
 
-    def get_conversation_stats(self):
+    def get_exchange_stats(self):
         try:
             with self.get_db_connection() as con:
                 con.row_factory = stats_factory
@@ -293,7 +328,7 @@ class MonitoringDBClient(DBClient):
                         AVG(response_time),
                         SUM(total_cost),
                         AVG(total_tokens)
-                    FROM {self.conversations_table_identifier}
+                    FROM {self.exchanges_table_identifier}
                 """)
                 row = cur.fetchone()
         except Exception as e:

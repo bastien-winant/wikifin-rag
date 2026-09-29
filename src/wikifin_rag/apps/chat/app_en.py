@@ -9,12 +9,12 @@ db_client = MonitoringDBClient()
 assistant = create_assistant()
 
 
-def save_feedback(conversation_id):
-    st.session_state.feedback[conversation_id] = st.session_state[f"feedback_{conversation_id}"]
+def save_feedback(exchange_id):
+    st.session_state.feedback[exchange_id] = st.session_state[f"feedback_{exchange_id}"]
     db_client.save_feedback(
-        conversation_id=conversation_id,
+        exchange_id=exchange_id,
         source="user",
-        score=st.session_state[f"feedback_{conversation_id}"]
+        score=st.session_state[f"feedback_{exchange_id}"]
     )
     
 
@@ -27,20 +27,20 @@ with st.sidebar:
     )
 
 
-for conversation_id, messages in st.session_state.history.items():
+for exchange_id, messages in st.session_state.history.items():
     for message in messages:
         with st.chat_message(message["role"]):
             st.write(message["content"])
 
             if message["role"] == "assistant":
-                feedback = st.session_state.feedback.get(conversation_id, None)
-                st.session_state[f"feedback_{conversation_id}"] = feedback
+                feedback = st.session_state.feedback.get(exchange_id, None)
+                st.session_state[f"feedback_{exchange_id}"] = feedback
                 st.feedback(
                     "thumbs",
-                    key=f"feedback_{conversation_id}",
+                    key=f"feedback_{exchange_id}",
                     disabled=feedback is not None,
                     on_change=save_feedback,
-                    args=[conversation_id],
+                    args=[exchange_id],
                 )
 
 if prompt := st.chat_input("Type in your question"):
@@ -59,13 +59,18 @@ if prompt := st.chat_input("Type in your question"):
 
             # save LLM response trace
             record = assistant.last_call
-            conversation_id = db_client.save_conversation(record, prompt)
-            st.session_state.conversation_id = conversation_id
+
+            if not st.session_state.conversation_id:
+                conversation_id = db_client.save_conversation(record)
+                st.session_state.conversation_id = conversation_id
+            
+            exchange_id = db_client.save_exchange(st.session_state.conversation_id, record, prompt)
+            st.session_state.exchange_id = exchange_id
 
             # LLM-as-a-judge
             relevance, explanation = evaluate_relevance(prompt, response)
             db_client.save_feedback(
-                conversation_id=conversation_id,
+                exchange_id=exchange_id,
                 source="judge",
                 relevance=relevance,
                 explanation=explanation
@@ -74,12 +79,12 @@ if prompt := st.chat_input("Type in your question"):
             st.write(response)
             st.feedback(
                 "thumbs",
-                key=f"feedback_{conversation_id}",
+                key=f"feedback_{exchange_id}",
                 on_change=save_feedback,
-                args=[conversation_id],
+                args=[exchange_id],
             )
     
-    st.session_state.history[conversation_id] = [
+    st.session_state.history[exchange_id] = [
         {"role": "user", "content": prompt},
         {"role": "assistant", "content": response}
     ]
