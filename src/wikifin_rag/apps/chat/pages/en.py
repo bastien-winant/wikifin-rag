@@ -8,6 +8,11 @@ from wikifin_rag.utils import num_tokens_from_message
 db_client = MonitoringDBClient()
 assistant = create_assistant()
 
+def reset_session_state():
+    st.session_state.history = {}
+    st.session_state.feedback = {}
+    st.session_state.conversation_id = None
+
 
 def save_feedback(exchange_id):
     st.session_state.feedback[exchange_id] = st.session_state[f"feedback_{exchange_id}"]
@@ -16,7 +21,6 @@ def save_feedback(exchange_id):
         source="user",
         score=st.session_state[f"feedback_{exchange_id}"]
     )
-    
 
 with st.sidebar:
     st.title("Ask Wikifin")
@@ -43,7 +47,10 @@ for exchange_id, messages in st.session_state.history.items():
                     args=[exchange_id],
                 )
 
-if prompt := st.chat_input("Type in your question"):
+with st.bottom:
+    col1, col2 = st.columns([6, 1])
+
+if prompt := col1.chat_input("Type in your question"):
     num_prompt_tokens = num_tokens_from_message(prompt)
 
     if num_prompt_tokens > st.session_state.MAX_INPUT_TOKENS:
@@ -88,3 +95,11 @@ if prompt := st.chat_input("Type in your question"):
         {"role": "user", "content": prompt},
         {"role": "assistant", "content": response}
     ]
+
+
+col2.button(
+    'Clear chat',
+    on_click=reset_session_state,
+    type="primary",
+    width="stretch"
+)
