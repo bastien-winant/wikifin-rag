@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 from datetime import datetime
 from hashlib import sha256
 from wikifin_rag.db_client import DocumentsDBClient
+from wikifin_rag.crawler.crawler.queries import insert_batch
 
 
 def has_class(selector, classname):
@@ -35,7 +36,7 @@ class PagesSpider(scrapy.Spider):
         self.batch = Batch(
             documents=[],
             size=self.batch_size,
-            on_full_callback=self.db_client.insert_batch,
+            on_full_callback=insert_batch,
             clear_on_full=True
         )
 

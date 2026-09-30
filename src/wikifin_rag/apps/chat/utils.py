@@ -1,11 +1,10 @@
 import streamlit as st
 from wikifin_rag.assistant import create_assistant
-from wikifin_rag.db_client import MonitoringDBClient
 from wikifin_rag.judge import evaluate_relevance
 from functools import reduce
 from wikifin_rag.utils import num_tokens_from_message
+from wikifin_rag.apps.chat.queries import save_conversation, save_exchange, save_feedback
 
-db_client = MonitoringDBClient()
 assistant = create_assistant()
 
 def reset_session_state():
@@ -13,13 +12,15 @@ def reset_session_state():
     st.session_state.feedback = {}
     st.session_state.conversation_id = None
 
-def save_feedback(exchange_id):
+
+def save_user_feedback(exchange_id):
     st.session_state.feedback[exchange_id] = st.session_state[f"feedback_{exchange_id}"]
-    db_client.save_feedback(
+    save_feedback(
         exchange_id=exchange_id,
         source="user",
         score=st.session_state[f"feedback_{exchange_id}"]
     )
+
 
 def display_conversation_history():
     for exchange_id, messages in st.session_state.history.items():
@@ -34,7 +35,7 @@ def display_conversation_history():
                         "thumbs",
                         key=f"feedback_{exchange_id}",
                         disabled=feedback is not None,
-                        on_change=save_feedback,
+                        on_change=save_user_feedback,
                         args=[exchange_id],
                     )
 
@@ -56,15 +57,15 @@ def generate_prompt_response(prompt, error_msg="That message is too long."):
             record = assistant.last_call
 
             if st.session_state.conversation_id is None:
-                conversation_id = db_client.save_conversation(record)
+                conversation_id = save_conversation(record)
                 st.session_state.conversation_id = conversation_id
 
-            exchange_id = db_client.save_exchange(st.session_state.conversation_id, record, prompt)
+            exchange_id = save_exchange(st.session_state.conversation_id, record, prompt)
             st.session_state.exchange_id = exchange_id
 
             # LLM-as-a-judge
             relevance, explanation = evaluate_relevance(prompt, response)
-            db_client.save_feedback(
+            save_feedback(
                 exchange_id=exchange_id,
                 source="judge",
                 relevance=relevance,
@@ -75,7 +76,7 @@ def generate_prompt_response(prompt, error_msg="That message is too long."):
             st.feedback(
                 "thumbs",
                 key=f"feedback_{exchange_id}",
-                on_change=save_feedback,
+                on_change=save_user_feedback,
                 args=[exchange_id],
             )
     
