@@ -1,25 +1,8 @@
-import numpy as np
 from wikifin_rag.items import LLMCallRecord, Stats
 
-def dict_factory(_, row):
-    return {
-        "id": row[0],
-        "title": row[1],
-        "section": row[2],
-        "content": row[3],
-        "source_url": row[5]
-    }
-
-
-def embedding_factory(_, row):
-    return {
-        "id": row[0],
-        "title": row[1],
-        "section": row[2],
-        "content": row[3],
-        "embedding": np.frombuffer(row[4]),
-        "source_url": row[5]
-    }
+def dict_factory(cursor, row):
+    fields = [column[0] for column in cursor.description]
+    return {key: value for key, value in zip(fields, row)}
 
 
 def record_factory(_, row):

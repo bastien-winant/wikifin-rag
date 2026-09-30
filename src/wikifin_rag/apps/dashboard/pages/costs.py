@@ -1,14 +1,23 @@
 import streamlit as st
-from numpy.random import default_rng as rng
+from wikifin_rag.apps.dashboard.queries import get_costs
 
-st.header("Cost")
+st.header("Costs")
 
-df = rng(0).standard_normal((10, 1))
+df = get_costs(
+    start_date=st.session_state.from_date,
+    end_date=st.session_state.to_date
+)
+
+df_grouped = df.groupby(st.session_state.granularity, as_index=False)\
+    [['total_cost', 'input_cost', 'output_cost']].sum()
 
 chart_tab, data_tab = st.tabs(["📈 Chart", "🗃 Data"])
 
-# chart_tab.subheader("A tab with a chart")
-chart_tab.line_chart(df)
-
-# data_tab.subheader("A tab with the data")
-data_tab.write(df)
+chart_tab.area_chart(
+    df_grouped,
+    x=st.session_state.granularity,
+    y=["total_cost", "input_cost", "output_cost"],
+    x_label=st.session_state.granularity.upper(),
+    y_label="Costs ($)"
+)
+data_tab.write(df_grouped)
