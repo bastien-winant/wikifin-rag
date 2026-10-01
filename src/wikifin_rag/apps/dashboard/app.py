@@ -7,23 +7,38 @@ end_date = date.today()
 start_date = end_date - relativedelta(months=3)
 
 
+def update_to_date():
+    st.session_state.to_date = max(st.session_state.to_date, st.session_state.from_date)
+
+def update_from_date():
+    st.session_state.from_date = min(st.session_state.from_date, st.session_state.to_date)
+
 with st.sidebar:
     st.text("Search parameters")
 
     with st.container():
         with st.container(width="content", horizontal=True):
-            from_date = st.date_input(label="from", value=start_date, max_value=end_date)
-            to_date = st.date_input(label="to", max_value=end_date)
+            st.date_input(
+                label="from",
+                value=start_date,
+                max_value=end_date,
+                key="from_date",
+                on_change=update_to_date
+            )
+
+            st.date_input(
+                label="to",
+                max_value=end_date,
+                key="to_date",
+                on_change=update_from_date
+            )
 
         granularity = st.selectbox(
             "Granularity",
             ("year", "month", "week", "day"),
-            index=2
+            index=2,
+            key="granularity"
         )
-
-st.session_state.from_date = from_date
-st.session_state.to_date = to_date
-st.session_state.granularity = granularity
 
 pg = st.navigation([
     st.Page(
