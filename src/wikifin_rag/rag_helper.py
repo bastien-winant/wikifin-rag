@@ -145,9 +145,12 @@ class RAGBase:
         return response.output_text
 
     def rag(self, query, history=None):
-        search_results = self.search_function(query)
-        prompt = self.build_prompt(query, search_results)
-        answer = self.llm(prompt=prompt, history=history)
+        try:
+            search_results = self.search_function(query)
+            prompt = self.build_prompt(query, search_results)
+            answer = self.llm(prompt=prompt, history=history)
+        except Exception as e:
+            raise
         return answer
 
     def total_cost(self):

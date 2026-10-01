@@ -40,15 +40,15 @@ def display_conversation_history():
                     )
 
 def generate_prompt_response(prompt, error_msg="That message is too long."):
-    num_prompt_tokens = num_tokens_from_message(prompt)
-    
-    if num_prompt_tokens > st.session_state.MAX_INPUT_TOKENS:
-        st.error(error_msg)
-        st.stop()
+    try:
+        num_prompt_tokens = num_tokens_from_message(prompt)
+        
+        if num_prompt_tokens > st.session_state.MAX_INPUT_TOKENS:
+            st.error(error_msg)
+            st.stop()
 
-    st.chat_message("user").write(prompt)
+        st.chat_message("user").write(prompt)
 
-    with st.chat_message("assistant"):
         with st.spinner():
             messages = reduce(lambda x, y: x + y, st.session_state.history.values(), [])
             response = assistant.rag(prompt, history=messages)
@@ -71,7 +71,11 @@ def generate_prompt_response(prompt, error_msg="That message is too long."):
                 relevance=relevance,
                 explanation=explanation
             )
-
+    except:
+        st.error("There was an error generating a response. Please try again later.")
+        st.stop()
+    finally:
+        with st.chat_message("assistant"):
             st.write(response)
             st.feedback(
                 "thumbs",
@@ -79,8 +83,8 @@ def generate_prompt_response(prompt, error_msg="That message is too long."):
                 on_change=save_user_feedback,
                 args=[exchange_id],
             )
-    
-    st.session_state.history[exchange_id] = [
-        {"role": "user", "content": prompt},
-        {"role": "assistant", "content": response}
-    ]
+        
+        st.session_state.history[exchange_id] = [
+            {"role": "user", "content": prompt},
+            {"role": "assistant", "content": response}
+        ]
