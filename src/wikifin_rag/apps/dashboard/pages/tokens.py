@@ -1,10 +1,15 @@
 import streamlit as st
 from wikifin_rag.apps.dashboard.queries import get_tokens
 
-df = get_tokens(
-    start_date=st.session_state.from_date,
-    end_date=st.session_state.to_date
-)
+try:
+    df = get_tokens(
+        start_date=st.session_state.from_date,
+        end_date=st.session_state.to_date
+    )
+except Exception as e:
+    print(e)
+    st.error("There was an error retrieving the data. Please try again later.")
+    st.stop()
 
 with st.container(gap="medium"):
     st.header("Token Usage")

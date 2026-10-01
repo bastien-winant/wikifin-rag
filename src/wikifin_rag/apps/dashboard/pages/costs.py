@@ -1,10 +1,14 @@
 import streamlit as st
 from wikifin_rag.apps.dashboard.queries import get_costs
 
-df = get_costs(
-    start_date=st.session_state.from_date,
-    end_date=st.session_state.to_date
-)
+try:
+    df = get_costs(
+        start_date=st.session_state.from_date,
+        end_date=st.session_state.to_date
+    )
+except:
+    st.error("There was an error retrieving the data. Please try again later.")
+    st.stop()
 
 
 

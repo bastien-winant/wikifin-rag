@@ -3,6 +3,44 @@ from wikifin_rag.factories import dict_factory, record_factory, stats_factory
 import pandas as pd
 
 
+def get_user_feedback(start_date, end_date):
+    db_client = MonitoringDBClient()
+    
+    try:
+        with db_client.get_db_connection() as con:
+            con.row_factory = dict_factory
+
+            cur = con.execute(
+                f"""
+                SELECT
+                    CASE
+                        WHEN f.score = 1 THEN 'POSITIVE'
+                        WHEN f.score = 0 THEN 'NEGATIVE'
+                        ELSE 'UNSCORED'
+                    END AS score,
+                    DATE(e.timestamp) AS date,
+                    STRFTIME('%F', e.timestamp) AS day,
+                    STRFTIME('%Y-%W', e.timestamp) AS week,
+                    STRFTIME('%Y-%m', e.timestamp) AS month,
+                    STRFTIME('%Y', e.timestamp) AS year
+                FROM {db_client.exchanges_table_identifier} AS e
+                LEFT JOIN {db_client.feedback_table_identifier} AS f
+                    ON f.exchange_id = e.id
+                AND f.source = 'user'
+                WHERE e.timestamp BETWEEN ? AND ?;
+                """,
+                (start_date, end_date)
+            )
+
+            rows = cur.fetchall()
+            rows_df = pd.DataFrame(rows)
+    except Exception as e:
+        db_client.logger.error(f"Error retrieving the data: {e}")
+        raise
+
+    return rows_df
+
+
 def get_tokens(start_date, end_date):
     db_client = MonitoringDBClient()
     
@@ -13,21 +51,17 @@ def get_tokens(start_date, end_date):
             cur = con.execute(
                 f"""
                 SELECT
-                    e.id,
-                    e.conversation_id,
-                    c.model,
-                    e.prompt_tokens AS input_tokens,
-                    e.completion_tokens AS output_tokens,
-                    e.total_tokens,
+                    id,
+                    prompt_tokens AS input_tokens,
+                    completion_tokens AS output_tokens,
+                    total_tokens,
                     date(timestamp) AS date,
                     STRFTIME('%F', timestamp) AS day,
                     STRFTIME('%Y-%W', timestamp) AS week,
                     STRFTIME('%Y-%m', timestamp) AS month,
                     STRFTIME('%Y', timestamp) AS year
-                FROM {db_client.exchanges_table_identifier} e
-                JOIN {db_client.conversations_table_identifier} c
-                ON e.conversation_id = c.id
-                WHERE e.timestamp BETWEEN ? AND ?
+                FROM {db_client.exchanges_table_identifier}
+                WHERE timestamp BETWEEN ? AND ?;
                 """,
                 (start_date, end_date)
             )
@@ -64,7 +98,7 @@ def get_costs(start_date, end_date):
                 FROM {db_client.exchanges_table_identifier} e
                 JOIN {db_client.conversations_table_identifier} c
                 ON e.conversation_id = c.id
-                WHERE e.timestamp BETWEEN ? AND ?
+                WHERE e.timestamp BETWEEN ? AND ?;
                 """,
                 (start_date, end_date)
             )
