@@ -1,30 +1,49 @@
 import streamlit as st
 from wikifin_rag.apps.dashboard.queries import get_tokens
 
-st.header("Token Usage")
-
 df = get_tokens(
     start_date=st.session_state.from_date,
     end_date=st.session_state.to_date
 )
 
+with st.container(gap="medium"):
+    st.header("Token Usage")
 
-if df.empty:
-    st.warning('No data available for the given time range.')
-    st.stop()
+    if df.empty:
+        st.warning('No data available for the given time range.')
+        st.stop()
 
 
-df_grouped = df.groupby(st.session_state.granularity, as_index=False)\
-    [["total_tokens", "input_tokens", "output_tokens"]].sum()
+    total_tokens = df.total_tokens.sum()
+    total_input_tokens = df.input_tokens.sum()
+    total_output_tokens = df.output_tokens.sum()
 
-chart_tab, data_tab = st.tabs(["📈 Chart", "🗃 Data"])
+    col1, col2, col3 = st.columns(3)
 
-chart_tab.line_chart(
-    df_grouped,
-    x=st.session_state.granularity,
-    y=["total_tokens", "input_tokens", "output_tokens"],
-    x_label=st.session_state.granularity.upper(),
-    y_label="Tokens"
-)
+    with col1:
+        st.badge("Input Tokens")
+        st.text(total_input_tokens)
 
-data_tab.write(df_grouped)
+    with col2:
+        st.badge("Output Tokens")
+        st.text(total_output_tokens)
+
+    with col3:
+        st.badge("Total Tokens")
+        st.text(total_tokens)
+
+
+    df_grouped = df.groupby(st.session_state.granularity, as_index=False)\
+        [["total_tokens", "input_tokens", "output_tokens"]].sum()
+
+    chart_tab, data_tab = st.tabs(["📈 Chart", "🗃 Data"])
+
+    chart_tab.line_chart(
+        df_grouped,
+        x=st.session_state.granularity,
+        y=["total_tokens", "input_tokens", "output_tokens"],
+        x_label=st.session_state.granularity.upper(),
+        y_label="Tokens"
+    )
+
+    data_tab.write(df_grouped)
