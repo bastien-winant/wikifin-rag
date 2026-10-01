@@ -29,8 +29,6 @@ def save_exchange(conversation_id, record, query):
     db_client = MonitoringDBClient()
     
     try:
-        timestamp = datetime.now(db_client.DB_TIMEZONE).strftime(format='%Y-%m-%d %H:%M:%S.%f')
-
         with db_client.get_db_connection() as con:
             cur = con.execute(f"""
                 INSERT INTO {db_client.exchanges_table_identifier} (
@@ -54,7 +52,7 @@ def save_exchange(conversation_id, record, query):
                     record.input_cost,
                     record.output_cost,
                     record.total_cost,
-                    timestamp,
+                    record.timestamp,
                 ),
             )
             exchange_id = cur.fetchone()[0]

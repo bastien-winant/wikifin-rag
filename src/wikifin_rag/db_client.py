@@ -88,7 +88,7 @@ class DocumentsDBClient(DBClient):
 
 
 class MonitoringDBClient(DBClient):
-    def __init__(self, db_path=PROJECT_ROOT / "db" / "wikifin_rag.db"):
+    def __init__(self, db_path=PROJECT_ROOT / "db" / "wikifin_traces.db"):
         super().__init__(db_path=db_path)
 
         self.conversations_table_identifier = "conversations"

@@ -20,10 +20,10 @@ def get_costs(start_date, end_date):
                     e.output_cost,
                     e.total_cost,
                     date(timestamp) AS date,
-                    STRFTIME('%F') AS day,
-                    STRFTIME('%Y-%W') AS week,
-                    STRFTIME('%Y-%m') AS month,
-                    STRFTIME('%Y') AS year
+                    STRFTIME('%F', timestamp) AS day,
+                    STRFTIME('%Y-%W', timestamp) AS week,
+                    STRFTIME('%Y-%m', timestamp) AS month,
+                    STRFTIME('%Y', timestamp) AS year
                 FROM {db_client.exchanges_table_identifier} e
                 JOIN {db_client.conversations_table_identifier} c
                 ON e.conversation_id = c.id
@@ -37,7 +37,7 @@ def get_costs(start_date, end_date):
         db_client.logger.error(f"Error retrieving the data: {e}")
         raise
 
-    return rows_df    
+    return rows_df
 
 
 def get_exchanges(limit=10):
