@@ -1,5 +1,6 @@
 import streamlit as st
 from wikifin_rag.apps.dashboard.queries import get_user_feedback
+import pandas as pd
 
 try:
     df = get_user_feedback(
@@ -45,18 +46,24 @@ with st.container(gap="medium"):
             st.text(f"{count_unscored}")
             st.caption(f"{(100 * count_unscored / df.shape[0]):.2f}%")
 
-    df_grouped = df.groupby([st.session_state.granularity, 'score'], as_index=False).size()
+    df_formatted = df.pivot_table(
+        index=["date", "day", "week", "month", "year"],
+        columns="score",
+        aggfunc="size",
+        fill_value=0,
+    ).reset_index()
+    
 
     chart_tab, data_tab = st.tabs(["📈 Chart", "🗃 Data"])
     
     chart_tab.bar_chart(
-        df_grouped,
+        df_formatted,
         x=st.session_state.granularity,
-        y="size",
-        color="score",
+        y=["POSITIVE", "NEGATIVE", "UNSCORED"],
+        color=["green", "red", "yellow"],
         stack="normalize",
         x_label=st.session_state.granularity.upper(),
         y_label="Percentage",
     )
 
-    data_tab.write(df_grouped)
+    data_tab.write(df_formatted)
