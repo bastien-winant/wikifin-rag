@@ -39,7 +39,7 @@ pg = st.navigation([
         title="Costs"
     ),
     st.Page(
-        "pages/usage.py",
+        "pages/tokens.py",
         title="Token Usage"
     )
 ])

@@ -3,6 +3,43 @@ from wikifin_rag.factories import dict_factory, record_factory, stats_factory
 import pandas as pd
 
 
+def get_tokens(start_date, end_date):
+    db_client = MonitoringDBClient()
+    
+    try:
+        with db_client.get_db_connection() as con:
+            con.row_factory = dict_factory
+
+            cur = con.execute(
+                f"""
+                SELECT
+                    e.id,
+                    e.conversation_id,
+                    c.model,
+                    e.prompt_tokens AS input_tokens,
+                    e.completion_tokens AS output_tokens,
+                    e.total_tokens,
+                    date(timestamp) AS date,
+                    STRFTIME('%F', timestamp) AS day,
+                    STRFTIME('%Y-%W', timestamp) AS week,
+                    STRFTIME('%Y-%m', timestamp) AS month,
+                    STRFTIME('%Y', timestamp) AS year
+                FROM {db_client.exchanges_table_identifier} e
+                JOIN {db_client.conversations_table_identifier} c
+                ON e.conversation_id = c.id
+                WHERE e.timestamp BETWEEN ? AND ?
+                """,
+                (start_date, end_date)
+            )
+            rows = cur.fetchall()
+            rows_df = pd.DataFrame(rows)
+    except Exception as e:
+        db_client.logger.error(f"Error retrieving the data: {e}")
+        raise
+
+    return rows_df
+
+
 def get_costs(start_date, end_date):
     db_client = MonitoringDBClient()
     
