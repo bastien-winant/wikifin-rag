@@ -2,6 +2,39 @@ from wikifin_rag.db_client import MonitoringDBClient
 from wikifin_rag.factories import dict_factory, record_factory, stats_factory
 import pandas as pd
 
+def get_judge_feedback(start_date, end_date):
+    db_client = MonitoringDBClient()
+    
+    try:
+        with db_client.get_db_connection() as con:
+            con.row_factory = dict_factory
+
+            cur = con.execute(
+                f"""
+                SELECT
+                    relevance,
+                    DATE(e.timestamp) AS date,
+                    STRFTIME('%F', e.timestamp) AS day,
+                    STRFTIME('%Y-%W', e.timestamp) AS week,
+                    STRFTIME('%Y-%m', e.timestamp) AS month,
+                    STRFTIME('%Y', e.timestamp) AS year
+                FROM {db_client.exchanges_table_identifier} AS e
+                LEFT JOIN {db_client.feedback_table_identifier} AS f
+                    ON f.exchange_id = e.id
+                AND f.source = 'judge'
+                WHERE e.timestamp BETWEEN ? AND ?;
+                """,
+                (start_date, end_date)
+            )
+
+            rows = cur.fetchall()
+            rows_df = pd.DataFrame(rows)
+    except Exception as e:
+        db_client.logger.error(f"Error retrieving the data: {e}")
+        raise
+
+    return rows_df
+
 
 def get_user_feedback(start_date, end_date):
     db_client = MonitoringDBClient()

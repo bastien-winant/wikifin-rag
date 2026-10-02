@@ -18,7 +18,7 @@ Analyze the relevance of the generated answer to the given question.
 Classify the answer as:
 - RELEVANT: the answer addresses the question
 - PARTLY_RELEVANT: the answer partially addresses the question
-- NON_RELEVANT: the answer does not address the question
+- IRRELEVANT: the answer does not address the question
 """.strip()
 
 judge_prompt = """

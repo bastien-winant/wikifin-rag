@@ -39,6 +39,7 @@ def display_conversation_history():
                         args=[exchange_id],
                     )
 
+
 def generate_prompt_response(prompt, error_msg="That message is too long."):
     try:
         num_prompt_tokens = num_tokens_from_message(prompt)

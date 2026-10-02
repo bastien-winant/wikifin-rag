@@ -18,10 +18,10 @@ with st.container(gap="medium"):
         st.warning('No data available for the given time range.')
         st.stop()
 
-    count_positives = int((df.score == 'POSITIVE').sum())
-    count_negatives = int((df.score == 'NEGATIVE').sum())
-    count_unscored = int((df.score == 'UNSCORED').sum())
-    count_scored = int((df.score != 'UNSCORED').sum())
+    count_positives = (df.score == 'POSITIVE').sum()
+    count_negatives = (df.score == 'NEGATIVE').sum()
+    count_unscored = (df.score == 'UNSCORED').sum()
+    count_scored = (df.score != 'UNSCORED').sum()
 
     col1, col2, col3 = st.columns(3)
 
@@ -29,41 +29,37 @@ with st.container(gap="medium"):
         st.badge("Positive scores", color="green")
 
         with st.container(horizontal=True, vertical_alignment="bottom", gap="xsmall"):
-            st.text(f"{count_positives}")
+            st.text(count_positives)
             st.caption(f"{(100 * count_positives / count_scored):.2f}%")
 
     with col2:
         st.badge("Negative scores", color="red")
 
         with st.container(horizontal=True, vertical_alignment="bottom", gap="xsmall"):
-            st.text(f"{count_negatives}")
+            st.text(count_negatives)
             st.caption(f"{(100 * count_negatives / count_scored):.2f}%")
 
     with col3:
         st.badge("No feedback", color="yellow")
 
         with st.container(horizontal=True, vertical_alignment="bottom", gap="xsmall"):
-            st.text(f"{count_unscored}")
+            st.text(count_unscored)
             st.caption(f"{(100 * count_unscored / df.shape[0]):.2f}%")
 
+
+    score_values = ['POSITIVE', 'NEGATIVE', 'UNSCORED']
+    df.score = pd.Categorical(df.score, score_values)
     df_formatted = df.pivot_table(
-        index=["date", "day", "week", "month", "year"],
+        index=st.session_state.granularity,
         columns="score",
         aggfunc="size",
         fill_value=0,
+        observed=False
     ).reset_index()
-    
 
-    chart_tab, data_tab = st.tabs(["📈 Chart", "🗃 Data"])
-    
-    chart_tab.bar_chart(
+    st.bar_chart(
         df_formatted,
         x=st.session_state.granularity,
-        y=["POSITIVE", "NEGATIVE", "UNSCORED"],
-        color=["green", "red", "yellow"],
-        stack="normalize",
-        x_label=st.session_state.granularity.upper(),
-        y_label="Percentage",
+        y=score_values,
+        color=["green", "red", "yellow"]
     )
-
-    data_tab.write(df_formatted)
