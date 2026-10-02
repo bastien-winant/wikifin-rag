@@ -26,15 +26,15 @@ with st.container(gap="medium"):
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.badge("Input Tokens")
+        st.badge("Input Tokens", color="blue")
         st.text(total_input_tokens)
 
     with col2:
-        st.badge("Output Tokens")
+        st.badge("Output Tokens", color="yellow")
         st.text(total_output_tokens)
 
     with col3:
-        st.badge("Total Tokens")
+        st.badge("Total Tokens", color="green")
         st.text(total_tokens)
 
 
@@ -48,7 +48,8 @@ with st.container(gap="medium"):
         x=st.session_state.granularity,
         y=["total_tokens", "input_tokens", "output_tokens"],
         x_label=st.session_state.granularity.upper(),
-        y_label="Tokens"
+        y_label="Tokens",
+        color=["green", "blue", "yellow"]
     )
 
     data_tab.write(df_grouped)

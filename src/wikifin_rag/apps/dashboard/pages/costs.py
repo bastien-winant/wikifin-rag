@@ -27,15 +27,15 @@ with st.container(gap="medium"):
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.badge("Input Cost")
+        st.badge("Input Cost", color="blue")
         st.text(f"${total_input_cost:.2f}")
 
     with col2:
-        st.badge("Output Cost")
+        st.badge("Output Cost", color="yellow")
         st.text(f"${total_output_cost:.2f}")
 
     with col3:
-        st.badge("Total Cost")
+        st.badge("Total Cost", color="green")
         st.text(f"${total_cost:.2f}")
 
 
@@ -49,7 +49,8 @@ with st.container(gap="medium"):
         x=st.session_state.granularity,
         y=["total_cost", "input_cost", "output_cost"],
         x_label=st.session_state.granularity.upper(),
-        y_label="Costs ($)"
+        y_label="Costs ($)",
+        color=["green", "blue", "yellow"]
     )
 
     data_tab.write(df_grouped)

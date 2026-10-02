@@ -26,21 +26,21 @@ with st.container(gap="medium"):
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.badge("Positive scores", color="green")
+        st.badge("Relevant answers", color="green")
 
         with st.container(horizontal=True, vertical_alignment="bottom", gap="xsmall"):
             st.text(count_relevant)
             st.caption(f"{(100 * count_relevant / count_scored):.2f}%")
 
     with col2:
-        st.badge("Negative scores", color="red")
+        st.badge("Irrelevant answers", color="red")
 
         with st.container(horizontal=True, vertical_alignment="bottom", gap="xsmall"):
             st.text(count_irrelevant)
             st.caption(f"{(100 * count_irrelevant / count_scored):.2f}%")
 
     with col3:
-        st.badge("No feedback", color="yellow")
+        st.badge("Partly relevant answers", color="yellow")
 
         with st.container(horizontal=True, vertical_alignment="bottom", gap="xsmall"):
             st.text(count_partly_relevant)
@@ -57,9 +57,15 @@ with st.container(gap="medium"):
         observed=False
     ).reset_index()
 
-    st.bar_chart(
+    chart_tab, data_tab = st.tabs(["📈 Chart", "🗃 Data"])
+
+    chart_tab.bar_chart(
         df_formatted,
         x=st.session_state.granularity,
         y=score_values,
-        color=["green", "red", "yellow"]
+        color=["green", "red", "yellow"],
+        x_label=st.session_state.granularity.upper(),
+        y_label="Count"
     )
+
+    data_tab.write(df_formatted)

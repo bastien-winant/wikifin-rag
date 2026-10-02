@@ -57,9 +57,15 @@ with st.container(gap="medium"):
         observed=False
     ).reset_index()
 
-    st.bar_chart(
+    chart_tab, data_tab = st.tabs(["📈 Chart", "🗃 Data"])
+
+    chart_tab.bar_chart(
         df_formatted,
         x=st.session_state.granularity,
         y=score_values,
-        color=["green", "red", "yellow"]
+        color=["green", "red", "yellow"],
+        x_label=st.session_state.granularity.upper(),
+        y_label="Count"
     )
+
+    data_tab.write(df_formatted)
