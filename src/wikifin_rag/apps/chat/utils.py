@@ -5,7 +5,10 @@ from functools import reduce
 from wikifin_rag.utils import num_tokens_from_message
 from wikifin_rag.apps.chat.queries import save_conversation, save_exchange, save_feedback
 
-assistant = create_assistant()
+
+def get_assistant():
+    return create_assistant()
+
 
 def reset_session_state():
     st.session_state.history = {}
@@ -43,7 +46,7 @@ def display_conversation_history():
 def generate_prompt_response(prompt, error_msg="Your message exceeds the maximum length. Please shorten it and try again."):
     try:
         num_prompt_tokens = num_tokens_from_message(prompt)
-        
+
         if num_prompt_tokens > st.session_state.MAX_INPUT_TOKENS:
             st.error(error_msg)
             st.stop()
@@ -51,6 +54,7 @@ def generate_prompt_response(prompt, error_msg="Your message exceeds the maximum
         st.chat_message("user").write(prompt)
 
         with st.spinner():
+            assistant = get_assistant()
             messages = reduce(lambda x, y: x + y, st.session_state.history.values(), [])
             response = assistant.rag(prompt, history=messages)
 
@@ -84,7 +88,7 @@ def generate_prompt_response(prompt, error_msg="Your message exceeds the maximum
                 on_change=save_user_feedback,
                 args=[exchange_id],
             )
-        
+
         st.session_state.history[exchange_id] = [
             {"role": "user", "content": prompt},
             {"role": "assistant", "content": response}

@@ -1,7 +1,11 @@
 import streamlit as st
 from datetime import date
 from dateutil.relativedelta import relativedelta
+from wikifin_rag.apps.dashboard.queries import get_db_client
 
+
+# Ensure the monitoring DB client (and schema) are ready before pages run.
+get_db_client()
 
 end_date = date.today()
 start_date = end_date - relativedelta(months=3)
@@ -39,6 +43,11 @@ with st.sidebar:
             index=2,
             key="granularity"
         )
+
+        if st.button("Refresh data", use_container_width=True):
+            st.cache_data.clear()
+            st.rerun()
+
 
 pg = st.navigation([
     st.Page(

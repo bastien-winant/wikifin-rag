@@ -1,12 +1,21 @@
+import streamlit as st
 from wikifin_rag.db_client import MonitoringDBClient
 from datetime import datetime
 
-def save_conversation(record):
+
+@st.cache_resource
+def get_db_client() -> MonitoringDBClient:
     db_client = MonitoringDBClient()
-    
+    db_client.init_db()
+    return db_client
+
+
+def save_conversation(record):
+    db_client = get_db_client()
+
     try:
         timestamp = datetime.now(db_client.DB_TIMEZONE).strftime(format='%Y-%m-%d %H:%M:%S.%f')
-        
+
         with db_client.get_db_connection() as con:
             cur = con.execute(f"""
                 INSERT INTO {db_client.conversations_table_identifier} (model, instructions, started_at)
@@ -23,11 +32,11 @@ def save_conversation(record):
         raise
 
     return conversation_id
-    
+
 
 def save_exchange(conversation_id, record, query):
-    db_client = MonitoringDBClient()
-    
+    db_client = get_db_client()
+
     try:
         with db_client.get_db_connection() as con:
             cur = con.execute(f"""
@@ -66,8 +75,8 @@ def save_exchange(conversation_id, record, query):
 
 
 def save_feedback(exchange_id, source, relevance=None, explanation=None, score=None):
-    db_client = MonitoringDBClient()
-    
+    db_client = get_db_client()
+
     timestamp = datetime.now(db_client.DB_TIMEZONE)
 
     try:

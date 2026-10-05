@@ -1,10 +1,25 @@
+import streamlit as st
 from wikifin_rag.db_client import MonitoringDBClient
 from wikifin_rag.factories import dict_factory, record_factory, stats_factory
 import pandas as pd
 
-def get_judge_feedback(start_date, end_date):
+
+# Monitoring data is append-only; short TTL keeps charts fresh without
+# re-querying on every Streamlit rerun (granularity change, page nav, etc.).
+_QUERY_TTL_SECONDS = 300
+
+
+@st.cache_resource
+def get_db_client() -> MonitoringDBClient:
     db_client = MonitoringDBClient()
-    
+    db_client.init_db()
+    return db_client
+
+
+@st.cache_data(ttl=_QUERY_TTL_SECONDS)
+def get_judge_feedback(start_date, end_date):
+    db_client = get_db_client()
+
     try:
         with db_client.get_db_connection() as con:
             con.row_factory = dict_factory
@@ -36,9 +51,10 @@ def get_judge_feedback(start_date, end_date):
     return rows_df
 
 
+@st.cache_data(ttl=_QUERY_TTL_SECONDS)
 def get_user_feedback(start_date, end_date):
-    db_client = MonitoringDBClient()
-    
+    db_client = get_db_client()
+
     try:
         with db_client.get_db_connection() as con:
             con.row_factory = dict_factory
@@ -74,9 +90,10 @@ def get_user_feedback(start_date, end_date):
     return rows_df
 
 
+@st.cache_data(ttl=_QUERY_TTL_SECONDS)
 def get_tokens(start_date, end_date):
-    db_client = MonitoringDBClient()
-    
+    db_client = get_db_client()
+
     try:
         with db_client.get_db_connection() as con:
             con.row_factory = dict_factory
@@ -107,9 +124,10 @@ def get_tokens(start_date, end_date):
     return rows_df
 
 
+@st.cache_data(ttl=_QUERY_TTL_SECONDS)
 def get_costs(start_date, end_date):
-    db_client = MonitoringDBClient()
-    
+    db_client = get_db_client()
+
     try:
         with db_client.get_db_connection() as con:
             con.row_factory = dict_factory
@@ -144,8 +162,9 @@ def get_costs(start_date, end_date):
     return rows_df
 
 
+@st.cache_data(ttl=_QUERY_TTL_SECONDS)
 def get_exchanges(limit=10):
-    db_client = MonitoringDBClient()
+    db_client = get_db_client()
 
     try:
         with db_client.get_db_connection() as con:
@@ -173,9 +192,10 @@ def get_exchanges(limit=10):
     return rows
 
 
+@st.cache_data(ttl=_QUERY_TTL_SECONDS)
 def get_conversation_stats():
-    db_client = MonitoringDBClient()
-    
+    db_client = get_db_client()
+
     try:
         with db_client.get_db_connection() as con:
             cur = con.execute(f"""
@@ -198,8 +218,9 @@ def get_conversation_stats():
     return dict(rows)
 
 
+@st.cache_data(ttl=_QUERY_TTL_SECONDS)
 def get_exchange_stats():
-    db_client = MonitoringDBClient()
+    db_client = get_db_client()
 
     try:
         with db_client.get_db_connection() as con:
@@ -221,8 +242,9 @@ def get_exchange_stats():
     return row
 
 
+@st.cache_data(ttl=_QUERY_TTL_SECONDS)
 def get_relevance_stats():
-    db_client = MonitoringDBClient()
+    db_client = get_db_client()
 
     try:
         with db_client.get_db_connection() as con:
@@ -240,8 +262,9 @@ def get_relevance_stats():
     return dict(rows)
 
 
+@st.cache_data(ttl=_QUERY_TTL_SECONDS)
 def get_user_feedback_stats():
-    db_client = MonitoringDBClient()
+    db_client = get_db_client()
 
     try:
         with db_client.get_db_connection() as con:
