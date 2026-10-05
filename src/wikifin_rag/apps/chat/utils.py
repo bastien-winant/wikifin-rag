@@ -40,7 +40,7 @@ def display_conversation_history():
                     )
 
 
-def generate_prompt_response(prompt, error_msg="That message is too long."):
+def generate_prompt_response(prompt, error_msg="Your message exceeds the maximum length. Please shorten it and try again."):
     try:
         num_prompt_tokens = num_tokens_from_message(prompt)
         

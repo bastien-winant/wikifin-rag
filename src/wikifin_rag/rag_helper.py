@@ -50,6 +50,7 @@ Your task is to answer questions about **personal finance management** using onl
    * Answer the user's question directly.
    * Avoid unnecessary explanations or speculation.
    * Keep the tone conversational rather than formal.
+   * Provide the answer in the language the question was asked in.
 '''
 
 PROMPT_TEMPLATE = '''

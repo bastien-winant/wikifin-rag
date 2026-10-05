@@ -16,7 +16,7 @@ with st.bottom:
     col1, col2 = st.columns([6, 1])
 
 if prompt := col1.chat_input("Tapez votre question ici"):
-    generate_prompt_response(prompt=prompt)
+    generate_prompt_response(prompt=prompt, error_msg="Votre message dépasse la longueur maximale. Veuillez le raccourcir, puis réessayer.")
 
 
 col2.button(
