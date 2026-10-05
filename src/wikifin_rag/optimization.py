@@ -1,16 +1,21 @@
 import argparse
 import json
 import pickle
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from dotenv import load_dotenv
 from hyperopt import STATUS_OK, Trials, fmin, hp, tpe
 from hyperopt.pyll import scope
+from openai import OpenAI
+from pydantic import BaseModel
 
 from wikifin_rag.config import PROJECT_ROOT
 from wikifin_rag.db_client import DocumentsDBClient
 from wikifin_rag.embedder import Embedder
-from wikifin_rag.evaluation_utils import evaluate
+from wikifin_rag.evaluation_utils import evaluate, llm_structured_retry, map_progress
 from wikifin_rag.search_utils import (
     build_text_index,
     build_vector_index,
@@ -24,6 +29,32 @@ PARAMS_PATH = PROJECT_ROOT / "config" / "search_params.json"
 EVAL_SPLIT = 0.25
 SPLIT_RANDOM_STATE = 1
 DEFAULT_MAX_EVALS = 10
+DEFAULT_N_DOCUMENTS = 500
+DEFAULT_N_QUESTIONS = 5
+
+DATA_GEN_INSTRUCTIONS = """
+You emulate a student or young professional who has questions about personal finance.
+
+Given a document excerpt, generate {} questions that this person might naturally ask and
+that can be answered solely using information contained in the excerpt.
+
+Requirements:
+
+* Each question must be complete and self-contained.
+* The questions should be detailed enough to be meaningful, but not unnecessarily long.
+* Assume the person has not seen or read the document excerpt when formulating the questions.
+* Avoid copying wording directly from the excerpt; use as few words from it as possible.
+* Phrase the questions naturally, as someone might ask them on an internet forum or Q&A site.
+* Keep the tone conversational rather than formal.
+* Do not make the questions excessively short or overly elaborate.
+* Do not introduce information, assumptions, or concepts that cannot be answered from the excerpt alone.
+
+Output only the questions.
+""".strip()
+
+
+class Questions(BaseModel):
+    questions: list[str]
 
 
 def _load_documents():
@@ -56,6 +87,60 @@ def _load_documents():
     documents = rows
     embeddings = [document.pop("embedding") for document in documents]
     return documents, embeddings
+
+
+def generate_document_ground_truth(doc, client, n=DEFAULT_N_QUESTIONS):
+    questions, _ = llm_structured_retry(
+        client,
+        DATA_GEN_INSTRUCTIONS.format(n),
+        doc["content"],
+        Questions,
+    )
+    return [
+        {"question": question, "document": doc["id"]}
+        for question in questions.questions
+    ]
+
+
+def generate_corpus_ground_truth(
+    documents,
+    output_path=GROUND_TRUTH_PATH,
+    n_documents=DEFAULT_N_DOCUMENTS,
+    n_questions=DEFAULT_N_QUESTIONS,
+):
+    if not documents:
+        raise ValueError("Cannot generate ground truth without documents.")
+
+    sample_size = min(n_documents, len(documents))
+    sample_indices = np.random.choice(len(documents), size=sample_size, replace=False)
+    sampled_documents = [documents[index] for index in sample_indices]
+
+    load_dotenv()
+    client = OpenAI()
+    try:
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            results = map_progress(
+                pool,
+                sampled_documents,
+                lambda document: generate_document_ground_truth(
+                    document,
+                    client,
+                    n=n_questions,
+                ),
+            )
+    finally:
+        client.close()
+
+    ground_truth = [question for document_questions in results for question in document_questions]
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(ground_truth).to_csv(output_path, index=False)
+    return ground_truth
+
+
+def _ensure_ground_truth(documents, path=GROUND_TRUTH_PATH, refresh=False):
+    if refresh or not path.exists():
+        generate_corpus_ground_truth(documents, output_path=path)
 
 
 def _load_optimization_ground_truth(path=GROUND_TRUTH_PATH):
@@ -170,14 +255,20 @@ def _vector_search_space():
 def optimize_parameters(
     max_evals=DEFAULT_MAX_EVALS,
     refresh=False,
+    refresh_ground_truth=False,
     ground_truth_path=GROUND_TRUTH_PATH,
     params_path=PARAMS_PATH,
 ):
     if max_evals < 1:
         raise ValueError("max_evals must be at least 1.")
 
-    ground_truth = _load_optimization_ground_truth(ground_truth_path)
     documents, embeddings = _load_documents()
+    _ensure_ground_truth(
+        documents,
+        path=ground_truth_path,
+        refresh=refresh_ground_truth,
+    )
+    ground_truth = _load_optimization_ground_truth(ground_truth_path)
     embedder = Embedder()
 
     text_index = build_text_index(documents=documents)
@@ -269,8 +360,17 @@ def main():
         action="store_true",
         help="Ignore cached trial results and run both optimizations again.",
     )
+    parser.add_argument(
+        "--refresh-ground-truth",
+        action="store_true",
+        help="Regenerate the ground-truth CSV even if it already exists.",
+    )
     args = parser.parse_args()
-    optimize_parameters(max_evals=args.max_evals, refresh=args.refresh)
+    optimize_parameters(
+        max_evals=args.max_evals,
+        refresh=args.refresh,
+        refresh_ground_truth=args.refresh_ground_truth,
+    )
 
 
 if __name__ == "__main__":

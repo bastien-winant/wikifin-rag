@@ -1,13 +1,14 @@
 {
   "text": {
-    "content": 1.1872225394433866,
-    "description": 2.555804061963496,
-    "section": 4.675553680413883,
-    "title": 1.7415129610439228
+    "content": 2.050430548188383,
+    "description": 8.137692138628891,
+    "section": 8.736504356118253,
+    "title": 2.016902075653497
   },
   "vector": {
-    "mode": "ivf",
-    "n_clusters": 32,
-    "n_probe_clusters": 21
+    "ef_construction": 50,
+    "ef_search": 80,
+    "m": 32,
+    "mode": "hnsw"
   }
 }
