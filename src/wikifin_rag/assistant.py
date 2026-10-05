@@ -1,29 +1,24 @@
 import sys
+import json
 import streamlit as st
 from openai import OpenAI
-import pickle
 from wikifin_rag.config import PROJECT_ROOT
 from wikifin_rag.search_utils import load_text_index, load_vector_index, vector_search, text_search, rrf_hybrid_search
 from wikifin_rag.rag_helper import RAGBase
 from wikifin_rag.db_client import MonitoringDBClient
 from wikifin_rag.embedder import Embedder
-import pickle
+
+with open(PROJECT_ROOT / "config" / "search_params.json", encoding="utf-8") as file:
+    SEARCH_PARAMS = json.load(file)
 
 def ts_function(query):
-    with open(PROJECT_ROOT / "data" / "evals" / "ts_index_params.pkl", "rb") as file:
-        ts_params = pickle.load(file)
-
     ts_index = load_text_index()
-    return text_search(query=query, index=ts_index, boost_dict=ts_params)
+    return text_search(query=query, index=ts_index, boost_dict=SEARCH_PARAMS["text"])
 
 
 def vs_function(query):
     embedder = Embedder()
-
-    with open(PROJECT_ROOT / "data" / "evals" / "vs_index_params.pkl", "rb") as file:
-        vs_params = pickle.load(file)
-
-    vs_index = load_vector_index(**vs_params)
+    vs_index = load_vector_index(**SEARCH_PARAMS["vector"])
     return vector_search(query=query, index=vs_index, embedder=embedder)
 
 

@@ -1,0 +1,14 @@
+{
+  "text": {
+    "content": 2.1742992636836087,
+    "description": 1.1416911790972017,
+    "section": 6.275035957576113,
+    "title": 0.040843540764220476
+  },
+  "vector": {
+    "ef_construction": 400,
+    "ef_search": 320,
+    "m": 16,
+    "mode": "hnsw"
+  }
+}
