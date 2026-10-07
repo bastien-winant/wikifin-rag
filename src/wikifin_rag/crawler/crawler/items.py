@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date as Date
 
 
@@ -22,12 +22,19 @@ class Batch:
     size: int
     on_full_callback: function | None = None
     clear_on_full: bool | None = False
+    _document_ids: set[str] = field(default_factory=set, init=False, repr=False)
 
     def clear_documents(self):
         self.documents.clear()
+        self._document_ids.clear()
 
     def add_document(self, data):
+        document_id = data.get("id")
+        if document_id in self._document_ids:
+            return
+
         self.documents.append(Document(**data))
+        self._document_ids.add(document_id)
 
         if self.is_full():
             if self.on_full_callback:

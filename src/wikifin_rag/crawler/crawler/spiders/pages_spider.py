@@ -43,6 +43,8 @@ class PagesSpider(scrapy.Spider):
         drop_tables = str(getattr(self, "drop_tables", "False")).lower() == "true"
         self.db_client.init_db(drop=drop_tables)
 
+        self.links = set()
+
 
     def parse(self, response):
         response.selector.remove_namespaces()
@@ -195,11 +197,17 @@ class PagesSpider(scrapy.Spider):
                         })
 
             # Recursively follow links
-            links = node.css("a")
-            links = set([link for link in links if link.attrib.get('href', "").startswith(f"/{language}") or
+            page_links = node.css("a")
+            page_links = set([link for link in page_links if link.attrib.get('href', "").startswith(f"/{language}") or
                                                 link.attrib.get('href', "").startswith(f"https://www.wikifin.be/{language}")])
 
-            yield from response.follow_all(links, self.parse_content_page)
+            # remove links already listed
+            page_links.difference_update(self.links)
+
+            # update the link list
+            self.links.update(page_links)
+            
+            yield from response.follow_all(page_links, self.parse_content_page)
         except Exception as e:
             self.logger.error(f"Unable to parse page content: {e}")
 
