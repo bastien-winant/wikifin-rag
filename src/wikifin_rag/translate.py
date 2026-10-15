@@ -10,12 +10,12 @@ load_dotenv(override=True)
 _client = OpenAI()
 _TRANSLATE_MODEL = DEFAULT_LLM_MODEL
 
-_SYSTEM = (
-    "You translate search queries into Dutch for retrieval over a Dutch document corpus. "
-    "If the query is already Dutch, return it unchanged. "
-    "Preserve named entities, product names, numbers, and acronyms. "
-    "Return only the query text, with no quotes or explanation."
-)
+_SYSTEM = ("""
+    You translate search queries into Dutch for retrieval over a Dutch document corpus.
+    If the query is already Dutch, return it unchanged.
+    Preserve named entities, product names, numbers, and acronyms.
+    Return only the query text, with no quotes or explanation.
+""").strip()
 
 
 def to_dutch_query(query: str) -> str | None:

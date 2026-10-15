@@ -1,4 +1,19 @@
+import sys
+from pathlib import Path
+
+# Community Cloud does not install the src-layout package editable; make it importable.
+_SRC = Path(__file__).resolve().parents[3]
+if str(_SRC) not in sys.path:
+    sys.path.insert(0, str(_SRC))
+
 import streamlit as st
+
+st.set_page_config(layout="wide", page_icon=":material/edit:")
+
+from wikifin_rag.env import bootstrap_runtime
+
+bootstrap_runtime()
+
 from datetime import date
 from dateutil.relativedelta import relativedelta
 
@@ -10,8 +25,10 @@ start_date = end_date - relativedelta(months=3)
 def update_to_date():
     st.session_state.to_date = max(st.session_state.to_date, st.session_state.from_date)
 
+
 def update_from_date():
     st.session_state.from_date = min(st.session_state.from_date, st.session_state.to_date)
+
 
 with st.sidebar:
     st.markdown("### Search parameters")
@@ -40,7 +57,7 @@ with st.sidebar:
             key="granularity"
         )
 
-        if st.button("Refresh", use_container_width=True):
+        if st.button("Refresh", width="stretch"):
             st.cache_data.clear()
             st.rerun()
 
@@ -63,9 +80,5 @@ pg = st.navigation([
         title="Token Usage"
     )
 ])
-
-st.set_page_config(
-    layout="wide",
-    page_icon=":material/edit:")
 
 pg.run()
