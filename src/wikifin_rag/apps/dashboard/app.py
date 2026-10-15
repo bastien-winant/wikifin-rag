@@ -1,11 +1,7 @@
 import streamlit as st
 from datetime import date
 from dateutil.relativedelta import relativedelta
-from wikifin_rag.apps.dashboard.queries import get_db_client
 
-
-# Ensure the monitoring DB client (and schema) are ready before pages run.
-get_db_client()
 
 end_date = date.today()
 start_date = end_date - relativedelta(months=3)
@@ -18,10 +14,10 @@ def update_from_date():
     st.session_state.from_date = min(st.session_state.from_date, st.session_state.to_date)
 
 with st.sidebar:
-    st.text("Search parameters")
+    st.markdown("### Search parameters")
 
     with st.container():
-        with st.container(width="content", horizontal=True):
+        with st.container(width="stretch", horizontal=True):
             st.date_input(
                 label="from",
                 value=start_date,
@@ -44,7 +40,7 @@ with st.sidebar:
             key="granularity"
         )
 
-        if st.button("Refresh data", use_container_width=True):
+        if st.button("Refresh", use_container_width=True):
             st.cache_data.clear()
             st.rerun()
 

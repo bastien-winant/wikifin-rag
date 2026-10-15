@@ -221,5 +221,4 @@ __marimo__/
 
 models/
 data/
-db/
-logs/
+.agents/

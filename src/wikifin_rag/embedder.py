@@ -1,32 +1,40 @@
+import logging
+from datetime import date
+from pathlib import Path
+
 import numpy as np
 import onnxruntime as ort
 from tokenizers import Tokenizer
-from pathlib import Path
-from wikifin_rag.config import PROJECT_ROOT
-import logging
-from datetime import date
 
-dest = PROJECT_ROOT / "logs" / "embedder"
-dest.mkdir(parents=True, exist_ok=True)
+from wikifin_rag.config import EMBED_MODEL, PROJECT_ROOT
+from wikifin_rag.download import ensure_embedding_model
 
-LOG_FILENAME = f"{date.today().strftime("%d_%m_%y")}.log"
+_DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / EMBED_MODEL
 
-fh = logging.FileHandler(dest / LOG_FILENAME)
-fh.setLevel(logging.WARNING)
-formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-fh.setFormatter(formatter)
+_logger = logging.getLogger(__name__)
+try:
+    _log_dir = PROJECT_ROOT / "logs" / "embedder"
+    _log_dir.mkdir(parents=True, exist_ok=True)
+    _fh = logging.FileHandler(_log_dir / f"{date.today().strftime('%d_%m_%y')}.log")
+    _fh.setLevel(logging.WARNING)
+    _fh.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
+    _logger.addHandler(_fh)
+except OSError:
+    _logger.addHandler(logging.NullHandler())
+
 
 class Embedder:
-    def __init__(self, path=PROJECT_ROOT / "models" / "Xenova/multilingual-e5-small"):
+    def __init__(self, path=_DEFAULT_MODEL_PATH):
         path = Path(path)
+        if path == _DEFAULT_MODEL_PATH:
+            path = ensure_embedding_model()
+
         self.tokenizer = Tokenizer.from_file(str(path / "tokenizer.json"))
         self.session = ort.InferenceSession(
             str(path / "model.onnx"), providers=["CPUExecutionProvider"]
         )
         self.input_names = {inp.name for inp in self.session.get_inputs()}
-
-        self.logger = logging.getLogger(__name__)
-        self.logger.addHandler(fh)
+        self.logger = _logger
 
     def encode(self, text, normalize=True):
         return self.encode_batch([text], normalize=normalize)[0]
@@ -51,7 +59,7 @@ class Embedder:
             pooled = (hidden * mask).sum(axis=1) / mask.sum(axis=1)
             if normalize:
                 pooled = pooled / np.linalg.norm(pooled, axis=1, keepdims=True)
-            return pooled
+            return pooled.tolist()
         except Exception as e:
-            self.logger.exception(f"Error embedding the data: {e}")
+            self.logger.exception("Error embedding the data: %s", e)
             raise

@@ -1,56 +1,64 @@
 from pydantic import BaseModel
 from typing import Literal
-from openai import OpenAI
-from dotenv import load_dotenv
-
 from wikifin_rag.evaluation_utils import llm_structured_retry
+from wikifin_rag.config import DEFAULT_LLM_MODEL
+import json
 
-class RelevanceVerdict(BaseModel):
-    relevance: Literal["NON_RELEVANT", "PARTLY_RELEVANT", "RELEVANT"]
-    explanation: str
+from dotenv import load_dotenv
+load_dotenv(override=True)
 
-judge_instructions = """
-You are an expert evaluator for a RAG system.
-Analyze the relevance of the generated answer to the given question.
+from openai import OpenAI
 
-Classify the answer as:
+_client = OpenAI()
+
+
+class AnswerEvaluation(BaseModel):
+    relevance: Literal["IRRELEVANT", "PARTLY_RELEVANT", "RELEVANT"]
+    reasoning: str
+
+
+_JUDGE_INSTRUCTIONS = """
+You are an impartial judge for a Wikifin personal-finance RAG assistant.
+
+You receive:
+- the user question
+- the assistant's AI answer
+
+Your task is to assess the relevance of the AI answer to the given question:
 - RELEVANT: the answer addresses the question
 - PARTLY_RELEVANT: the answer partially addresses the question
-- IRRELEVANT: the answer does not address the question
+- IRRELEVANT: the answer is incorrect or does not address the question
+
+Rules:
+- The AI answer should NOT quote the document word-for-word
+- Extra detail is fine as long as the core answer is correct
+- If the assistant correctly refuses personalized advice or reports insufficient
+  information, mark it as "RELEVANT"
+
+Be fair and focus on relevance and correctness, not style.
+Always provide your reasoning in English.
 """.strip()
 
-judge_prompt = """
-Question: {question}
-Generated Answer: {answer}
-""".strip()
 
-def evaluate_relevance(question, answer, client=None):
-    if client is None:
-        client = OpenAI()
+def evaluate_anwer(query: str, response: str) -> dict | None:
+    payload = {
+        "query": query,
+        "assistant_answer": response,
+    }
+    
+    try:
+        response, _ = llm_structured_retry(
+            client=_client,
+            instructions=_JUDGE_INSTRUCTIONS,
+            user_prompt=json.dumps(payload, ensure_ascii=False),
+            output_type=AnswerEvaluation,
+            model=DEFAULT_LLM_MODEL,
+        )
 
-    prompt = judge_prompt.format(
-        question=question,
-        answer=answer
-    )
+        relevance = response.relevance
+        reasoning = response.reasoning
 
-    result, _ = llm_structured_retry(
-        client,
-        judge_instructions,
-        prompt,
-        RelevanceVerdict,
-    )
-
-    client.close()
-
-    return result.relevance, result.explanation
-
-
-if __name__ == "__main__":
-    load_dotenv(override=True)
-
-    question = "Can I still join the course?"
-    answer = "Yes, you can still join. The course is self-paced."
-
-    relevance, explanation = evaluate_relevance(question, answer)
-    print(relevance)
-    print(explanation)
+        return relevance, reasoning
+    except Exception as exc:
+        print(f"Judge failed: {exc}")
+        return None

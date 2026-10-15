@@ -30,14 +30,14 @@ with st.container(gap="medium"):
 
         with st.container(horizontal=True, vertical_alignment="bottom", gap="xsmall"):
             st.text(count_positives)
-            st.caption(f"{(100 * count_positives / count_scored):.2f}%")
+            st.caption(f"{(100 * count_positives / count_scored):.2f}%" if count_scored else "N/A")
 
     with col2:
         st.badge("Negative scores", color="red")
 
         with st.container(horizontal=True, vertical_alignment="bottom", gap="xsmall"):
             st.text(count_negatives)
-            st.caption(f"{(100 * count_negatives / count_scored):.2f}%")
+            st.caption(f"{(100 * count_negatives / count_scored):.2f}%" if count_scored else "N/A")
 
     with col3:
         st.badge("No feedback", color="yellow")

@@ -5,14 +5,14 @@ from datetime import date as Date
 @dataclass
 class Document:
     id: str
+    title: str
+    description: str
+    section: str
+    html: str
+    content: str
     source_url: str
-    language: str | None = None
+    language: str
     updated_on: Date | None = None
-    title: str | None = None
-    description: str | None = None
-    section: str | None = None
-    html: str | None = None
-    content: str | None = None
     related_links: str | None = None
 
 
@@ -30,10 +30,24 @@ class Batch:
 
     def add_document(self, data):
         document_id = data.get("id")
-        if document_id in self._document_ids:
+
+        if document_id is None or document_id in self._document_ids:
             return
 
-        self.documents.append(Document(**data))
+        if data.get("title") is None:
+            data["title"] = ""
+
+        if data.get("description") is None:
+            data["description"] = ""
+
+        if data.get("section") is None:
+            data["section"] = ""
+
+        if data.get("content") is None:
+            return
+
+        document = Document(**data)
+        self.documents.append(document)
         self._document_ids.add(document_id)
 
         if self.is_full():

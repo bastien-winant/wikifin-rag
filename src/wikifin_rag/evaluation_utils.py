@@ -1,10 +1,55 @@
 import time
 from tqdm.auto import tqdm
-from concurrent.futures import ThreadPoolExecutor
+import random
+import json
 from functools import reduce
+import pandas as pd
+
+from pydantic import BaseModel
+
+from pinecone import Pinecone
+from wikifin_rag.config import INDEX_NAME
+
+from concurrent.futures import ThreadPoolExecutor
+from wikifin_rag.config import DEFAULT_LLM_MODEL
+
+from dotenv import load_dotenv
+load_dotenv(override=True)
+
+from openai import OpenAI
+
+_pc = Pinecone(source_tag="pinecone:wikifin_search")
+_index = _pc.index(name=INDEX_NAME)
+_client = OpenAI()
 
 
-def calculate_cost(usage):
+_QUERY_GEN_INSTRUCTIONS = """
+You create evaluation cases for a Belgian personal-finance RAG assistant grounded in Wikifin.
+
+Given one document chunk, produce natural user questions/search queries in each requested language
+that this chunk should retrieve as a relevant result.
+
+Rules:
+- Produce one query per requested language.
+- Prefer realistic user questions over keyword dumps.
+- The questions must be answerable from the chunk alone.
+- Keep the same information need across languages (parallel translations of intent).
+- Do not mention document IDs or that this is an evaluation.
+- Do not quote the chunk verbatim at length; paraphrase the information need.
+""".strip()
+
+QUERY_LANGUAGES = ["nl", "en", "fr"]
+
+
+class Query(BaseModel):
+    text: str
+    language: str
+
+class Queries(BaseModel):
+    queries: list[Query]
+
+
+def calc_price(usage):
     input_price_per_million = 0.75
     output_price_per_million = 4.50
 
@@ -19,8 +64,13 @@ def calculate_cost(usage):
     }
 
 
-def calculate_total_cost(usages):
-    total_cost = reduce(lambda x, y: x + calculate_cost(y)['total_cost'], usages, 0.0)
+def calc_total_price(usages):
+    total_cost = 0.0
+
+    for usage in usages:
+        cost = calc_price(usage)
+        total_cost = total_cost + cost["total_cost"]
+
     return total_cost
 
 
@@ -76,50 +126,106 @@ def map_progress(pool, seq, f):
     return results
 
 
-def compute_relevance(q, search_function):
-    doc_id = q["document"]
-    results = search_function(query=q["question"])
-
-    relevance = []
-    for d in results:
-        relevance.append(int(d["id"] == doc_id))
-
-    return relevance
+def _list_document_ids(namespace: str = "__default__", limit: int | None = None) -> list[str]:
+    ids: list[str] = []
+    for entry in _index.documents.list(namespace=namespace):
+        ids.append(entry.id)
+        if limit is not None and len(ids) >= limit:
+            break
+    return ids
 
 
-def compute_relevance_total(ground_truth, search_function):
-    with ThreadPoolExecutor(max_workers=6) as pool:
-        relevance_total = map_progress(pool, ground_truth, lambda q: compute_relevance(q, search_function))
-
-    return relevance_total
-
-
-def hit_rate(relevance):
-    cnt = 0
-
-    for line in relevance:
-        if 1 in line:
-            cnt = cnt + 1
-
-    return cnt / len(relevance)
-
-
-def mrr(relevance):
-    total_score = 0.0
-
-    for line in relevance:
-        for rank in range(len(line)):
-            if line[rank] == 1:
-                total_score = total_score + 1 / (rank + 1)
-                break
-
-    return total_score / len(relevance)
+def _fetch_documents(ids: list[str], include_fields: list[str], namespace: str = "__default__") -> list[dict]:
+    docs: list[dict] = []
+    batch_size = 50
+    for start in range(0, len(ids), batch_size):
+        batch_ids = ids[start : start + batch_size]
+        response = _index.documents.fetch(
+            namespace=namespace,
+            ids=batch_ids,
+            include_fields=include_fields,
+        )
+        for doc_id in batch_ids:
+            doc = response.documents.get(doc_id)
+            if doc is None:
+                continue
+            payload = doc.to_dict()
+            if payload.get("language") and payload["language"] != "nl":
+                continue
+            if not payload.get("text"):
+                continue
+            docs.append(payload)
+    return docs
 
 
-def evaluate(ground_truth, search_function):
-    relevance_total = compute_relevance_total(ground_truth, search_function)
+def sample_documents(include_fields: list, n: int = 20, oversample_factor: int = 4) -> list[dict]:
+    """List a capped ID pool, shuffle, and fetch until we have n usable docs."""
+    candidate_ids = _list_document_ids(limit=max(n * oversample_factor, n))
+    random.shuffle(candidate_ids)
+    selected: list[dict] = []
+    batch_size = 50
+    for start in range(0, len(candidate_ids), batch_size):
+        batch = _fetch_documents(candidate_ids[start : start + batch_size], include_fields=include_fields)
+        for doc in batch:
+            selected.append(doc)
+            if len(selected) >= n:
+                return selected
+    return selected
 
-    return {
-        "hit_rate": hit_rate(relevance_total),
-        "mrr": mrr(relevance_total),
+
+def _generate_document_queries(doc: dict) -> list[dict]:
+    excerpt = (doc.get("text") or "")[:1200]
+    user_payload = {
+        "title": doc.get("title", ""),
+        "section": doc.get("section", ""),
+        "text": excerpt,
+        "languages": QUERY_LANGUAGES,
     }
+    try:
+        data, usage = llm_structured_retry(
+            client=_client,
+            instructions=_QUERY_GEN_INSTRUCTIONS,
+            user_prompt=json.dumps(user_payload, ensure_ascii=False),
+            output_type=Queries,
+            model=DEFAULT_LLM_MODEL
+        )
+        queries = data.queries
+
+        results = [
+            {
+                "query": query.text,
+                "query_language": query.language,
+                "relevant_id": doc["_id"],
+                "title": doc.get("title", ""),
+                "section": doc.get("section", ""),
+                "text": doc.get("text", "")
+            } for query in queries
+        ]
+
+        return results, usage
+    except Exception as exc:
+        print(f"Query generation failed for {doc.get('_id')}: {exc}")
+        return
+
+
+def generate_corpus_queries(docs, file_path: str | None = None):
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        results = map_progress(pool, docs, _generate_document_queries)
+
+    ground_truth: list[dict] = []
+    usages: list = []
+
+    for result in results:
+        if result:
+            records, usage = result
+            ground_truth.extend(records)
+            usages.append(usage)
+
+
+    total_cost = reduce(lambda x, y: x + calc_price(y)["total_cost"], usages, 0.0)
+
+    if file_path:
+        df_ground_truth = pd.DataFrame(ground_truth)
+        df_ground_truth.to_csv(file_path, index=False)
+
+    return ground_truth, total_cost

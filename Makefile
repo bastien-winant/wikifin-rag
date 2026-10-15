@@ -2,7 +2,7 @@ run:
 	uv run python ./src/wikifin_rag/assistant.py
 
 chat:
-	uv run streamlit run ./src/wikifin_rag/apps/chat/app.py
+	uv run streamlit run ./src/wikifin_rag/apps/chat_app/app.py
 
-monitor:
+dashboard:
 	uv run streamlit run ./src/wikifin_rag/apps/dashboard/app.py
