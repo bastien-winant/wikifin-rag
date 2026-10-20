@@ -1,260 +1,183 @@
-from wikifin_rag.db_client import MonitoringDBClient
-from wikifin_rag.factories import dict_factory, record_factory, stats_factory
+import os
+from datetime import datetime
+
 import pandas as pd
+import streamlit as st
+from dotenv import load_dotenv
+from supabase import create_client
 
+load_dotenv(override=True)
+
+
+@st.cache_resource
+def get_supabase():
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_SECRET_KEY")
+    return create_client(url, key)
+
+
+@st.cache_data(ttl="5m", max_entries=64, show_spinner="Loading feedback…")
 def get_judge_feedback(start_date, end_date):
-    db_client = MonitoringDBClient()
-    
-    try:
-        with db_client.get_db_connection() as con:
-            con.row_factory = dict_factory
+    response = (
+        get_supabase()
+        .table("exchanges")
+        .select("start_datetime, feedback(relevance)")
+        .gte("start_datetime", start_date)
+        .lte("start_datetime", end_date)
+        .eq("feedback.source", "judge")
+        .execute()
+    )
 
-            cur = con.execute(
-                f"""
-                SELECT
-                    relevance,
-                    DATE(e.timestamp) AS date,
-                    STRFTIME('%F', e.timestamp) AS day,
-                    STRFTIME('%Y-%W', e.timestamp) AS week,
-                    STRFTIME('%Y-%m', e.timestamp) AS month,
-                    STRFTIME('%Y', e.timestamp) AS year
-                FROM {db_client.exchanges_table_identifier} AS e
-                LEFT JOIN {db_client.feedback_table_identifier} AS f
-                    ON f.exchange_id = e.id
-                AND f.source = 'judge'
-                WHERE e.timestamp BETWEEN ? AND ?;
-                """,
-                (start_date, end_date)
+    raw_data = response.data
+
+    rows = []
+    for entry in raw_data:
+        dt = datetime.fromisoformat(entry["start_datetime"])
+        for feedback in entry["feedback"]:
+            rows.append(
+                {
+                    "relevance": feedback["relevance"],
+                    "date": dt.date(),
+                    "day": dt.strftime("%F"),
+                    "week": dt.strftime("%Y-%W"),
+                    "month": dt.strftime("%Y-%m"),
+                    "year": dt.strftime("%Y"),
+                }
             )
 
-            rows = cur.fetchall()
-            rows_df = pd.DataFrame(rows)
-    except Exception as e:
-        db_client.logger.error(f"Error retrieving the data: {e}")
-        raise
-
-    return rows_df
+    return pd.DataFrame(rows)
 
 
+@st.cache_data(ttl="5m", max_entries=64, show_spinner="Loading feedback…")
 def get_user_feedback(start_date, end_date):
-    db_client = MonitoringDBClient()
-    
-    try:
-        with db_client.get_db_connection() as con:
-            con.row_factory = dict_factory
+    response = (
+        get_supabase()
+        .table("exchanges")
+        .select("start_datetime, feedback(source, score)")
+        .gte("start_datetime", start_date)
+        .lte("start_datetime", end_date)
+        .or_("source.eq.user,source.is.null", reference_table="feedback")
+        .execute()
+    )
 
-            cur = con.execute(
-                f"""
-                SELECT
-                    CASE
-                        WHEN f.score = 1 THEN 'POSITIVE'
-                        WHEN f.score = 0 THEN 'NEGATIVE'
-                        ELSE 'UNSCORED'
-                    END AS score,
-                    DATE(e.timestamp) AS date,
-                    STRFTIME('%F', e.timestamp) AS day,
-                    STRFTIME('%Y-%W', e.timestamp) AS week,
-                    STRFTIME('%Y-%m', e.timestamp) AS month,
-                    STRFTIME('%Y', e.timestamp) AS year
-                FROM {db_client.exchanges_table_identifier} AS e
-                LEFT JOIN {db_client.feedback_table_identifier} AS f
-                    ON f.exchange_id = e.id
-                AND f.source = 'user'
-                WHERE e.timestamp BETWEEN ? AND ?;
-                """,
-                (start_date, end_date)
+    raw_data = response.data
+
+    rows = []
+    for entry in raw_data:
+        dt = datetime.fromisoformat(entry["start_datetime"])
+        feedback_rows = entry["feedback"]
+
+        if feedback_rows == []:
+            rows.append(
+                {
+                    "score": "UNSCORED",
+                    "date": dt.date(),
+                    "day": dt.strftime("%F"),
+                    "week": dt.strftime("%Y-%W"),
+                    "month": dt.strftime("%Y-%m"),
+                    "year": dt.strftime("%Y"),
+                }
+            )
+            continue
+
+        for feedback in entry["feedback"]:
+            score = "POSITIVE" if feedback["score"] == "1" else "NEGATIVE"
+
+            rows.append(
+                {
+                    "score": score,
+                    "date": dt.date(),
+                    "day": dt.strftime("%F"),
+                    "week": dt.strftime("%Y-%W"),
+                    "month": dt.strftime("%Y-%m"),
+                    "year": dt.strftime("%Y"),
+                }
             )
 
-            rows = cur.fetchall()
-            rows_df = pd.DataFrame(rows)
-    except Exception as e:
-        db_client.logger.error(f"Error retrieving the data: {e}")
-        raise
-
-    return rows_df
+    return pd.DataFrame(rows)
 
 
+@st.cache_data(ttl="5m", max_entries=64, show_spinner="Loading tokens…")
 def get_tokens(start_date, end_date):
-    db_client = MonitoringDBClient()
-    
-    try:
-        with db_client.get_db_connection() as con:
-            con.row_factory = dict_factory
-
-            cur = con.execute(
-                f"""
-                SELECT
+    response = (
+        get_supabase()
+        .table("responses")
+        .select(
+            """
                     id,
-                    prompt_tokens AS input_tokens,
-                    completion_tokens AS output_tokens,
-                    total_tokens,
-                    date(timestamp) AS date,
-                    STRFTIME('%F', timestamp) AS day,
-                    STRFTIME('%Y-%W', timestamp) AS week,
-                    STRFTIME('%Y-%m', timestamp) AS month,
-                    STRFTIME('%Y', timestamp) AS year
-                FROM {db_client.exchanges_table_identifier}
-                WHERE timestamp BETWEEN ? AND ?;
-                """,
-                (start_date, end_date)
-            )
-            rows = cur.fetchall()
-            rows_df = pd.DataFrame(rows)
-    except Exception as e:
-        db_client.logger.error(f"Error retrieving the data: {e}")
-        raise
+                    input_tokens,
+                    output_tokens,
+                    created_at
+                """
+        )
+        .gte("created_at", start_date)
+        .lte("created_at", end_date)
+        .execute()
+    )
 
-    return rows_df
+    raw_data = response.data
+
+    rows = []
+    for entry in raw_data:
+        dt = datetime.fromisoformat(entry["created_at"])
+        rows.append(
+            {
+                "id": entry["id"],
+                "input_tokens": entry["input_tokens"],
+                "output_tokens": entry["output_tokens"],
+                "date": dt.date(),
+                "day": dt.strftime("%F"),
+                "week": dt.strftime("%Y-%W"),
+                "month": dt.strftime("%Y-%m"),
+                "year": dt.strftime("%Y"),
+            }
+        )
+
+    df = pd.DataFrame(rows)
+
+    df["total_tokens"] = df.input_tokens + df.output_tokens
+
+    return df
 
 
+@st.cache_data(ttl="5m", max_entries=64, show_spinner="Loading costs…")
 def get_costs(start_date, end_date):
-    db_client = MonitoringDBClient()
-    
-    try:
-        with db_client.get_db_connection() as con:
-            con.row_factory = dict_factory
+    response = (
+        get_supabase()
+        .table("responses")
+        .select(
+            """
+                    id,
+                    input_cost,
+                    output_cost,
+                    created_at
+                """
+        )
+        .gte("created_at", start_date)
+        .lte("created_at", end_date)
+        .execute()
+    )
 
-            cur = con.execute(
-                f"""
-                SELECT
-                    e.id,
-                    e.conversation_id,
-                    c.model,
-                    e.input_cost,
-                    e.output_cost,
-                    e.total_cost,
-                    date(timestamp) AS date,
-                    STRFTIME('%F', timestamp) AS day,
-                    STRFTIME('%Y-%W', timestamp) AS week,
-                    STRFTIME('%Y-%m', timestamp) AS month,
-                    STRFTIME('%Y', timestamp) AS year
-                FROM {db_client.exchanges_table_identifier} e
-                JOIN {db_client.conversations_table_identifier} c
-                ON e.conversation_id = c.id
-                WHERE e.timestamp BETWEEN ? AND ?;
-                """,
-                (start_date, end_date)
-            )
-            rows = cur.fetchall()
-            rows_df = pd.DataFrame(rows)
-    except Exception as e:
-        db_client.logger.error(f"Error retrieving the data: {e}")
-        raise
+    raw_data = response.data
 
-    return rows_df
+    rows = []
+    for entry in raw_data:
+        dt = datetime.fromisoformat(entry["created_at"])
+        rows.append(
+            {
+                "id": entry["id"],
+                "input_cost": entry["input_cost"],
+                "output_cost": entry["output_cost"],
+                "date": dt.date(),
+                "day": dt.strftime("%F"),
+                "week": dt.strftime("%Y-%W"),
+                "month": dt.strftime("%Y-%m"),
+                "year": dt.strftime("%Y"),
+            }
+        )
 
+    df = pd.DataFrame(rows)
 
-def get_exchanges(limit=10):
-    db_client = MonitoringDBClient()
+    df["total_cost"] = df.input_cost + df.output_cost
 
-    try:
-        with db_client.get_db_connection() as con:
-            con.row_factory = record_factory
-
-            cur = con.execute(
-                f"""
-                SELECT e.id, e.query, e.answer, c.model,
-                    c.instructions, e.prompt,
-                    e.prompt_tokens, e.completion_tokens, e.total_tokens,
-                    e.response_time, e.input_cost, e.output_cost, e.total_cost, e.timestamp
-                FROM {db_client.exchanges_table_identifier} e
-                JOIN {db_client.conversations_table_identifier} c
-                ON c.id = e.conversation_id
-                ORDER BY e.timestamp DESC
-                LIMIT ?;
-                """,
-                (limit,),
-            )
-            rows = cur.fetchall()
-    except Exception as e:
-        db_client.logger.error(f"Error retrieving the data: {e}")
-        raise
-
-    return rows
-
-
-def get_conversation_stats():
-    db_client = MonitoringDBClient()
-    
-    try:
-        with db_client.get_db_connection() as con:
-            cur = con.execute(f"""
-                SELECT
-                    c.id,
-                    c.started_at,
-                    COUNT(e.id) AS total_exchanges,
-                    SUM(e.total_cost) AS total_cost,
-                    SUM(e.total_tokens) AS total_tokens
-                FROM {db_client.conversations_table_identifier} c
-                JOIN {db_client.exchanges_table_identifier} e
-                ON c.id = e.conversation_id
-                GROUP BY 1, 2;
-            """)
-            rows = cur.fetchall()
-    except Exception as e:
-        db_client.logger.error(f"Error retrieving the data: {e}")
-        raise
-
-    return dict(rows)
-
-
-def get_exchange_stats():
-    db_client = MonitoringDBClient()
-
-    try:
-        with db_client.get_db_connection() as con:
-            con.row_factory = stats_factory
-
-            cur = con.execute(f"""
-                SELECT
-                    COUNT(*),
-                    AVG(response_time),
-                    SUM(total_cost),
-                    AVG(total_tokens)
-                FROM {db_client.exchanges_table_identifier};
-            """)
-            row = cur.fetchone()
-    except Exception as e:
-        db_client.logger.error(f"Error retrieving the data: {e}")
-        raise
-
-    return row
-
-
-def get_relevance_stats():
-    db_client = MonitoringDBClient()
-
-    try:
-        with db_client.get_db_connection() as con:
-            cur = con.execute(f"""
-                SELECT relevance, COUNT(*)
-                FROM {db_client.feedback_table_identifier}
-                WHERE source = 'judge'
-                GROUP BY relevance;
-            """)
-            rows = cur.fetchall()
-    except Exception as e:
-        db_client.logger.error(f"Error retrieving the data: {e}")
-        raise
-
-    return dict(rows)
-
-
-def get_user_feedback_stats():
-    db_client = MonitoringDBClient()
-
-    try:
-        with db_client.get_db_connection() as con:
-            cur = con.execute(f"""
-                SELECT
-                    SUM(CASE WHEN score > 0 THEN 1 ELSE 0 END),
-                    SUM(CASE WHEN score = 0 THEN 1 ELSE 0 END)
-                FROM {db_client.feedback_table_identifier}
-                WHERE source = 'user';
-            """)
-            row = cur.fetchone()
-    except Exception as e:
-        db_client.logger.error(f"Error retrieving the data: {e}")
-        raise
-
-    return row
+    return df
