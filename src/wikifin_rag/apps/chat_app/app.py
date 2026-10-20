@@ -1,21 +1,12 @@
-# import sys
 import threading
-# from pathlib import Path
-
-# # Community Cloud does not install the src-layout package editable; make it importable.
-# _SRC = Path(__file__).resolve().parents[3]
-# if str(_SRC) not in sys.path:
-#     sys.path.insert(0, str(_SRC))
-
 import streamlit as st
-
-st.set_page_config(page_title="Wikifin AI", layout="centered")
-
 from wikifin_rag.assistant import get_assistant_response
 from wikifin_rag.utils import num_tokens_from_message
 from wikifin_rag.queries import log_feedback
 from wikifin_rag.judge import evaluate_anwer
 from wikifin_rag.queries import log_turn
+
+st.set_page_config(page_title="Wikifin AI", layout="centered")
 
 _MAX_INPUT_TOKENS = 2000
 _LANGUAGES = ("NL", "FR", "EN")

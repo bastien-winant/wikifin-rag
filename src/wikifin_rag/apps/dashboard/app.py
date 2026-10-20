@@ -1,18 +1,8 @@
-# import sys
-# from pathlib import Path
-
-# # Community Cloud does not install the src-layout package editable; make it importable.
-# _SRC = Path(__file__).resolve().parents[3]
-# if str(_SRC) not in sys.path:
-#     sys.path.insert(0, str(_SRC))
-
 import streamlit as st
-
-st.set_page_config(layout="wide", page_icon=":material/edit:")
-
-
 from datetime import date
 from dateutil.relativedelta import relativedelta
+
+st.set_page_config(layout="wide", page_icon=":material/edit:")
 
 
 end_date = date.today()
