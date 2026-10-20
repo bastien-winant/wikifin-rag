@@ -11,10 +11,6 @@ import streamlit as st
 
 st.set_page_config(page_title="Wikifin AI", layout="centered")
 
-from wikifin_rag.env import bootstrap_runtime
-
-bootstrap_runtime()
-
 from wikifin_rag.assistant import get_assistant_response
 from wikifin_rag.utils import num_tokens_from_message
 from wikifin_rag.queries import log_feedback

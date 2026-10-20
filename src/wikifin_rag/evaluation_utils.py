@@ -8,10 +8,9 @@ import pandas as pd
 from pydantic import BaseModel
 
 from pinecone import Pinecone
-from wikifin_rag.config import INDEX_NAME
+from wikifin_rag.config import DEFAULT_LLM_MODEL, INDEX_NAME
 
 from concurrent.futures import ThreadPoolExecutor
-from wikifin_rag.config import DEFAULT_LLM_MODEL
 
 from dotenv import load_dotenv
 load_dotenv(override=True)

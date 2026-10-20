@@ -10,9 +10,6 @@ import streamlit as st
 
 st.set_page_config(layout="wide", page_icon=":material/edit:")
 
-from wikifin_rag.env import bootstrap_runtime
-
-bootstrap_runtime()
 
 from datetime import date
 from dateutil.relativedelta import relativedelta
