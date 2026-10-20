@@ -1,7 +1,3 @@
-import logging
-from datetime import date
-from pathlib import Path
-
 import numpy as np
 import onnxruntime as ort
 from tokenizers import Tokenizer
@@ -9,14 +5,9 @@ from tokenizers import Tokenizer
 from wikifin_rag.config import EMBED_MODEL, PROJECT_ROOT
 from wikifin_rag.download import ensure_embedding_model
 
-_DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / EMBED_MODEL
-
-
 class Embedder:
-    def __init__(self, path=_DEFAULT_MODEL_PATH):
-        path = Path(path)
-        if path == _DEFAULT_MODEL_PATH:
-            path = ensure_embedding_model()
+    def __init__(self, repo=EMBED_MODEL, dest=PROJECT_ROOT / "models"):
+        path = ensure_embedding_model(repo=repo, dest=dest)
 
         self.tokenizer = Tokenizer.from_file(str(path / "tokenizer.json"))
         self.session = ort.InferenceSession(
@@ -48,5 +39,5 @@ class Embedder:
             if normalize:
                 pooled = pooled / np.linalg.norm(pooled, axis=1, keepdims=True)
             return pooled.tolist()
-        except Exception as e:
+        except:
             raise
