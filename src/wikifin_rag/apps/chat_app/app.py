@@ -5,6 +5,8 @@ from wikifin_rag.utils import num_tokens_from_message
 from wikifin_rag.queries import log_feedback
 from wikifin_rag.judge import evaluate_anwer
 from wikifin_rag.queries import log_turn
+from streamlit.runtime.scriptrunner import add_script_run_ctx
+
 
 st.set_page_config(
 	page_title="Chat with the Wikifin docs, powered by OpenAI",
@@ -167,10 +169,12 @@ if prompt := st.session_state.prompt:
 
             # collet and save LLM feedback
             if turn_logged:
-                threading.Thread(
+                thread = threading.Thread(
                     target=save_llm_feedback,
                     daemon=True,
-                ).start()
+                )
+                add_script_run_ctx(thread=thread)
+                thread.start()
 
         st.write(st.session_state.response)
         st.feedback(
