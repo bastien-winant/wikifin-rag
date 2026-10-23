@@ -6,51 +6,50 @@ from wikifin_rag.queries import log_feedback
 from wikifin_rag.judge import evaluate_anwer
 from wikifin_rag.queries import log_turn
 
-st.set_page_config(page_title="Wikifin AI", layout="centered")
+st.set_page_config(
+	page_title="Chat with the Wikifin docs, powered by OpenAI",
+	layout="centered",
+	initial_sidebar_state="locked",
+	menu_items=None
+)
 
 _MAX_INPUT_TOKENS = 2000
-_LANGUAGES = ("NL", "FR", "EN")
-_COPY = {
+_LANGUAGES_OPTIONS = {
     "NL": {
+        "label": "🇳🇱 NL",
         "title": "Vraag het aan Wikifin",
-        "explainer": (
-            "Stel vragen over persoonlijke financiën — budgetteren, verzekeringen, "
-            "sparen en meer — en krijg antwoorden gebaseerd op de educatieve inhoud "
-            "van Wikifin."
-        ),
-        "disclaimer": (
-            "Antwoorden zijn gebaseerd op informatie gepubliceerd op "
-            "[wikifin.be](https://www.wikifin.be). Dit is geen gepersonaliseerd "
-            "financieel advies."
-        ),
-        "placeholder": "Stel een vraag over persoonlijke financiën...",
+        "explainer": "Een betrouwbare chatbot voor vragen over sparen, leningen en belastingen in België.",
+        "disclaimer": """
+			Wikifin is uitsluitend bedoeld voor educatieve doeleinden en vervangt geen professioneel financieel advies.
+			De antwoorden zijn uitsluitend gebaseerd op informatie van [wikifin.be](https://wikifin.be).
+		""",
+        "placeholder": "Stel een vraag...",
+		"button_label": "Verzenden",
+		"spinner_label": "Ik denk na..."
     },
     "FR": {
+        "label": "🇫🇷 FR",
         "title": "Demandez à Wikifin",
-        "explainer": (
-            "Posez des questions sur les finances personnelles — budget, assurances, "
-            "épargne et plus encore — et obtenez des réponses basées sur le contenu "
-            "éducatif de Wikifin."
-        ),
-        "disclaimer": (
-            "Les réponses sont basées sur les informations publiées sur "
-            "[wikifin.be](https://www.wikifin.be). Il ne s'agit pas de conseils "
-            "financiers personnalisés."
-        ),
-        "placeholder": "Posez une question sur les finances personnelles...",
+        "explainer": "Un chatbot fiable pour vos questions sur l'épargne, les prêts et les impôts en Belgique.",
+        "disclaimer": """
+			Wikifin est uniquement destiné à des fins éducatives et ne remplace pas les conseils d'un professionnel de la finance.
+			Les réponses sont basées exclusivement sur les informations de [wikifin.be](https://wikifin.be).
+		""",
+        "placeholder": "Posez une question...",
+		"button_label": "Envoyer",
+		"spinner_label": "Je réfléchis..."
     },
     "EN": {
+		"label": "🇬🇧 EN",
         "title": "Ask Wikifin",
-        "explainer": (
-            "Ask questions about personal finance — budgeting, insurance, saving, "
-            "and more — and get answers grounded in Wikifin’s educational content."
-        ),
-        "disclaimer": (
-            "Answers are based on information published on "
-            "[wikifin.be](https://www.wikifin.be). This is not personalized "
-            "financial advice."
-        ),
-        "placeholder": "Ask a question about personal finance...",
+        "explainer": "A trustworthy chatbot for your questions about managing savings, loans, and taxes in Belgium.",
+        "disclaimer": """
+			Ask Wikifin is for educational purposes only and should not be used as a substitute for professional financial advice.
+			Answers are based strictly on information from [wikifin.be](https://wikifin.be).
+		""",
+        "placeholder": "Ask a question...",
+		"button_label": "Submit",
+		"spinner_label": "Thinking..."
     },
 }
 
@@ -68,7 +67,11 @@ def save_user_feedback():
     log_feedback(exchange_id=exchange_id, source="user", score=score)
 
 
-def save_llm_feedback(exchange_id, question, response):
+def save_llm_feedback():
+    exchange_id = st.session_state.get("exchange_id")
+    question = st.session_state.get("prompt")
+    response = st.session_state.get("response")
+
     if exchange_id is None or response is None:
         return
 
@@ -86,13 +89,13 @@ def save_llm_feedback(exchange_id, question, response):
 
 
 def clear_session_state():
-    language = st.session_state.get("language")
+    language = st.session_state.get("language", "NL")
     st.session_state.clear()
-    if language is not None:
-        st.session_state.language = language
+    st.session_state.language = language
 
 
-def set_response_status():
+def reset_response_status():
+    st.session_state.prompt = None
     st.session_state.prompt_responded = False
     st.session_state.user_feedback = None
     st.session_state.turn_logged = False
@@ -100,76 +103,83 @@ def set_response_status():
 
 with st.sidebar:
     language = st.segmented_control(
-        "Language",
-        options=_LANGUAGES,
-        default="NL",
+        label="language",
+        options=_LANGUAGES_OPTIONS.keys(),
+        format_func=lambda option: _LANGUAGES_OPTIONS[option]["label"],
         key="language",
         label_visibility="collapsed",
-    ) or "NL"
-    copy = _COPY[language]
+        default="NL",
+        on_change=reset_response_status
+    )
 
-    st.header(copy["title"])
-    st.text(copy["explainer"])
-    st.caption(copy["disclaimer"])
+    container = st.container()
+    container.space(size="medium")
 
-with st.container(gap="medium", horizontal_alignment="center"):
-    st.title("Ask Wikifin", text_alignment="center")
 
-    with st.form(key="prompt_form", clear_on_submit=True, border=False):
-        with st.container(horizontal=True, gap="xsmall"):
-            st.text_input(
-                key="prompt",
-                label="prompt",
-                label_visibility="collapsed",
-                placeholder=copy["placeholder"],
-                required=True,
-                persist_state="page"
-            )
+    container.header(_LANGUAGES_OPTIONS[st.session_state.language]["title"])
+    container.text(_LANGUAGES_OPTIONS[st.session_state.language]["explainer"])
+    container.caption(_LANGUAGES_OPTIONS[st.session_state.language]["disclaimer"], unsafe_allow_html=True)
 
-            st.form_submit_button(type="primary", on_click=set_response_status)
 
-    if prompt := st.session_state.get("prompt"):
-        num_prompt_tokens = num_tokens_from_message(prompt)
+st.title("Ask Wikifin", text_alignment="center")
 
-        if num_prompt_tokens > _MAX_INPUT_TOKENS:
-            st.error("Your message exceeds the maximum length. Please shorten it and try again.")
-            st.stop()
+with st.form("query_form", clear_on_submit=True):
+	st.text_area(
+		label="User prompt",
+		key="prompt",
+		label_visibility="collapsed",
+		placeholder=_LANGUAGES_OPTIONS[st.session_state.language]["placeholder"],
+	)
+	st.form_submit_button(
+		_LANGUAGES_OPTIONS[st.session_state.language]["button_label"],
+		width="stretch",
+		key="submitted",
+		type="primary",
+	)
 
-        st.divider(width="stretch")
-        with st.container(height=300, gap="xsmall", autoscroll=False, border=False):
-            st.chat_message("human").write(prompt)
 
-            with st.chat_message("ai"):
-                if not st.session_state.get("prompt_responded"):
-                    with st.spinner():
-                        exchange_record, response_records, tool_call_records = get_assistant_response(question=prompt)
+if prompt := st.session_state.prompt:    
+    # limit the size of the input
+    num_prompt_tokens = num_tokens_from_message(prompt)
+    if num_prompt_tokens > _MAX_INPUT_TOKENS:
+        st.error("Your message exceeds the maximum length. Please shorten it and try again.")
+        st.stop()
 
-                        st.session_state.response = exchange_record.response
-                        st.session_state.exchange_id = exchange_record.id
-                        st.session_state.prompt_responded = True
 
-                    turn_logged = log_turn(exchange_record, response_records, tool_call_records)
-                    st.session_state.turn_logged = turn_logged
+    # write the user prompt to the screen
+    st.chat_message("human").write(prompt)
 
-                    if turn_logged:
-                        threading.Thread(
-                            target=save_llm_feedback,
-                            args=(exchange_record.id, prompt, exchange_record.response),
-                            daemon=True,
-                        ).start()
+    with st.chat_message("ai"):
+        # check if the user query has been answered
+        if not st.session_state.get("prompt_responded"):
+            with st.spinner(_LANGUAGES_OPTIONS[st.session_state.language]["spinner_label"]):
+                # get AI response to the prompt
+                exchange_record, response_records, tool_call_records = get_assistant_response(question=prompt)
 
-                st.write(st.session_state.response)
+                # save conversation data in the session state
+                st.session_state.response = exchange_record.response
+                st.session_state.exchange_id = exchange_record.id
+                st.session_state.prompt_responded = True
 
-                if st.session_state.get("prompt_responded") and not st.session_state.get("turn_logged"):
-                    st.warning("Couldn't save this conversation. Feedback won't be recorded.")
+            # save telemetry data for the exchange
+            turn_logged = log_turn(exchange_record, response_records, tool_call_records)
+            st.session_state.turn_logged = turn_logged
 
-                st.feedback(
-                    "thumbs",
-                    key="user_feedback",
-                    on_change=save_user_feedback,
-                    disabled=(
-                        not st.session_state.get("turn_logged")
-                        or st.session_state.get("user_feedback") is not None
-                    ),
-                )
-                st.button("Clear", type="primary", key="clear", on_click=clear_session_state)
+            # collet and save LLM feedback
+            if turn_logged:
+                threading.Thread(
+                    target=save_llm_feedback,
+                    daemon=True,
+                ).start()
+
+        st.write(st.session_state.response)
+        st.feedback(
+            "thumbs",
+            key="user_feedback",
+            on_change=save_user_feedback,
+            disabled=(
+                not st.session_state.get("turn_logged") # make sure the exchange ID exists in the DB
+                or st.session_state.get("user_feedback") is not None # user can provide feedback only once
+            ),
+        )
+        st.button("Clear chat", on_click=clear_session_state)
