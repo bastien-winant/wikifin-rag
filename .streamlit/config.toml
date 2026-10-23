@@ -1,39 +1,77 @@
-# Nord Theme for Streamlit
-# Arctic, north-bluish color palette with frost-inspired accents
+# Professional Financial Dashboard Theme (Dark)
+# Conservative, trustworthy palette with clear data visualization
+
 [theme]
 base = "dark"
-primaryColor = "#88c0d0"
-backgroundColor = "#2e3440"
-secondaryBackgroundColor = "#3b4252"
-codeBackgroundColor = "#3b4252"
-textColor = "#eceff4"
-linkColor = "#81a1c1"
-borderColor = "#4c566a"
+primaryColor = "#60A5FA"             # Bright blue for dark mode
+backgroundColor = "#0F172A"          # Deep slate
+secondaryBackgroundColor = "#1E293B" # Slightly lighter slate
+codeBackgroundColor = "#1E293B"
+textColor = "#F1F5F9"                # Light text
+linkColor = "#60A5FA"
+borderColor = "#334155"
+codeTextColor = "#CBD5E1"
 showWidgetBorder = true
 showSidebarBorder = true
-baseRadius = "4px"
-buttonRadius = "4px"
-font = "Inter:https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+baseRadius = "6px"                   # Subtle rounding - professional, not playful
+buttonRadius = "6px"
+
+# Typography - Clean, professional fonts
+font = "'Inter':https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFont = "'Inter':https://fonts.googleapis.com/css2?family=Inter:wght@600;700&display=swap"
 codeFont = "'JetBrains Mono':https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
-codeFontSize = "0.875rem"
-codeTextColor = "#d8dee9"
 baseFontSize = 14
 baseFontWeight = 400
-headingFontSizes = ["32px", "24px", "20px", "16px", "14px", "12px"]
-headingFontWeights = [600, 600, 600, 600, 600, 600]
+codeFontSize = "13px"
+headingFontSizes = ["28px", "22px", "18px", "16px", "14px", "12px"]
+headingFontWeights = [700, 600, 600, 600, 500, 500]
 linkUnderline = false
-chartCategoricalColors = ["#88c0d0", "#81a1c1", "#5e81ac", "#a3be8c", "#ebcb8b", "#d08770", "#bf616a"]
 
-# Nord color palette (Frost + Aurora)
-blueColor = "#81a1c1"
-greenColor = "#a3be8c"
-yellowColor = "#ebcb8b"
-orangeColor = "#d08770"
-redColor = "#bf616a"
-violetColor = "#b48ead"
+# Semantic colors for financial indicators
+greenColor = "#34D399"  # Positive/gains - bright green
+redColor = "#F87171"    # Negative/losses - bright red
+yellowColor = "#FBBF24" # Warnings/caution
+orangeColor = "#FB923C" # Alerts
+blueColor = "#60A5FA"   # Informational
+violetColor = "#A78BFA" # Accent/highlights
+grayColor = "#94A3B8"   # Neutral/secondary text
 
+# Chart colors - Distinguishable palette for financial data
+chartCategoricalColors = [
+    "#60A5FA",
+    "#34D399",
+    "#A78BFA",
+    "#F87171",
+    "#FBBF24",
+    "#38BDF8",
+    "#94A3B8",
+    "#FB923C",
+]
+
+# Sequential colors for heatmaps (blue gradient)
+chartSequentialColors = [
+    "#0C4A6E",
+    "#075985",
+    "#0369A1",
+    "#0284C7",
+    "#0EA5E9",
+    "#38BDF8",
+    "#7DD3FC",
+    "#BAE6FD",
+    "#E0F2FE",
+    "#F0F9FF",
+]
+
+# Dataframe styling
+dataframeBorderColor = "#334155"
+dataframeHeaderBackgroundColor = "#1E293B"
+dataframeHeaderTextColor = "#F8FAFC"
+
+# Sidebar
 [theme.sidebar]
-backgroundColor = "#3b4252"
-secondaryBackgroundColor = "#434c5e"
-codeBackgroundColor = "#434c5e"
-borderColor = "#4c566a"
+backgroundColor = "#0F172A"
+secondaryBackgroundColor = "#1E293B"
+codeBackgroundColor = "#1E293B"
+textColor = "#F1F5F9"
+borderColor = "#334155"
+primaryColor = "#60A5FA"
